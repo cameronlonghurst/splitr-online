@@ -517,12 +517,13 @@ export class GameRoom extends DurableObject {
             const c2 = p2.cells[cj];
             if (!c2) continue;
             const r2 = Math.sqrt(c2.mass * 100);
+            const dist = Math.hypot(c1.x - c2.x, c1.y - c2.y);
+            const minDist = r1 + r2;
 
-            // Predator must be at least 10–15% larger
+            // Predator must be strictly at least 15% larger (massA >= massB * 1.15)
             if (c1.mass >= c2.mass * 1.15) {
-              const dist = Math.hypot(c1.x - c2.x, c1.y - c2.y);
               // Center inside predator circle or >= 60% covered
-              if (dist < r1 || dist < r1 - r2 * 0.25) {
+              if (dist < r1 - r2 * 0.25 || dist < r1 * 0.9) {
                 c1.mass += c2.mass;
                 p2.cells.splice(cj, 1);
 
@@ -540,6 +541,21 @@ export class GameRoom extends DurableObject {
                 }
                 break;
               }
+            } else if (dist < minDist && c1.mass < c2.mass * 1.15 && c2.mass < c1.mass * 1.15) {
+              // Cells similar in size (within 15% of each other) slide or collide gently without consuming
+              const overlap = minDist - dist;
+              const normalX = (c2.x - c1.x) / (dist || 1);
+              const normalY = (c2.y - c1.y) / (dist || 1);
+              const pushForce = Math.min(overlap * 0.35, 15);
+              c1.x -= normalX * pushForce * 0.5;
+              c1.y -= normalY * pushForce * 0.5;
+              c2.x += normalX * pushForce * 0.5;
+              c2.y += normalY * pushForce * 0.5;
+
+              c1.x = Math.max(r1, Math.min(MAP_SIZE - r1, c1.x));
+              c1.y = Math.max(r1, Math.min(MAP_SIZE - r1, c1.y));
+              c2.x = Math.max(r2, Math.min(MAP_SIZE - r2, c2.x));
+              c2.y = Math.max(r2, Math.min(MAP_SIZE - r2, c2.y));
             }
           }
         }

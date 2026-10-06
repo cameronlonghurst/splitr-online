@@ -2726,110 +2726,121 @@ import { OnlineRoomClient } from './onlineAdapter.js';
     drawOnlineFoods(ctx) {
       const halfW = (this.canvas.width / 2) / this.camZoom + 30;
       const halfH = (this.canvas.height / 2) / this.camZoom + 30;
-      const left = this.camX - halfW;
-      const right = this.camX + halfW;
-      const top = this.camY - halfH;
-      const bottom = this.camY + halfH;
-      const isDark = this.isDarkMode;
-      const foodRadius = 8;
 
       for (const food of this.onlineFoods.values()) {
         if (
-          food.x < left ||
-          food.x > right ||
-          food.y < top ||
-          food.y > bottom
+          food.x < this.camX - halfW ||
+          food.x > this.camX + halfW ||
+          food.y < this.camY - halfH ||
+          food.y > this.camY + halfH
         ) {
           continue;
         }
 
         ctx.beginPath();
-        ctx.arc(food.x, food.y, foodRadius, 0, Math.PI * 2);
-        ctx.fillStyle = food.color || '#3B82F6';
+        ctx.arc(food.x, food.y, food.radius || 9.5, 0, Math.PI * 2);
+        ctx.fillStyle = food.color;
         ctx.fill();
 
-        ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.75)' : 'rgba(17, 17, 17, 0.75)';
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = this.isDarkMode ? 'rgba(255, 255, 255, 0.85)' : '#111111';
+        ctx.lineWidth = food.isSuper ? 2 : 1;
         ctx.stroke();
       }
     }
 
     drawOnlinePlayers(ctx) {
-      const isDark = this.isDarkMode;
+      const cellList = [];
 
-      // 1. Draw remote players (smoothly interpolated positions and radii for each sub-cell)
+      // Collect remote player cells
       for (const p of this.onlineRemotePlayers.values()) {
         for (const c of p.cells.values()) {
-          const radius = Math.max(15, c.radius || Math.sqrt((c.mass || 25) * 100));
-          ctx.save();
-          ctx.beginPath();
-          ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
-
-          // Fill body
-          ctx.fillStyle = p.color || (isDark ? '#FFFFFF' : '#111111');
-          ctx.fill();
-
-          // Stroke ring
-          ctx.lineWidth = 2.5;
-          ctx.strokeStyle = isDark ? '#374151' : '#D1D5DB';
-          ctx.stroke();
-
-          // Name text above cell
-          ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
-          ctx.textAlign = 'center';
-          ctx.textBaseline = 'middle';
-          ctx.fillStyle = isDark ? '#F3F4F6' : '#111111';
-          ctx.strokeStyle = isDark ? '#000000' : '#FFFFFF';
-          ctx.lineWidth = 3;
-          const name = p.name || 'Player';
-          ctx.strokeText(name, c.x, c.y - radius - 14);
-          ctx.fillText(name, c.x, c.y - radius - 14);
-
-          // Mass text inside cell
-          if (radius >= 25) {
-            ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
-            ctx.fillStyle = '#FFFFFF';
-            ctx.fillText(Math.round(c.mass), c.x, c.y);
-          }
-
-          ctx.restore();
+          cellList.push({
+            id: c.id,
+            playerId: p.id,
+            x: c.x,
+            y: c.y,
+            mass: c.mass,
+            radius: c.radius || Math.sqrt(c.mass * 100),
+            color: p.color || '#64748B',
+            name: p.name || 'Player',
+            squish: c.squish || 1.0,
+            squishAngle: c.squishAngle || 0
+          });
         }
       }
 
-      // 2. Draw local player (all active predicted sub-cells)
+      // Collect local player cells
       for (const c of this.onlineLocalCells.values()) {
-        const radius = Math.max(15, c.radius || Math.sqrt((c.mass || 25) * 100));
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
+        cellList.push({
+          id: c.id,
+          playerId: this.localPlayerId,
+          x: c.x,
+          y: c.y,
+          mass: c.mass,
+          radius: c.radius || Math.sqrt(c.mass * 100),
+          color: this.localColor || (this.isDarkMode ? '#FFFFFF' : '#111111'),
+          name: this.localNickname || 'Player',
+          squish: c.squish || 1.0,
+          squishAngle: c.squishAngle || 0
+        });
+      }
 
-        // Fill body
-        ctx.fillStyle = this.localColor || (isDark ? '#FFFFFF' : '#111111');
+      // Sort cells by mass: smaller rendered underneath, larger rendered on top
+      cellList.sort((a, b) => a.mass - b.mass);
+
+      const fontFam = this.fontReady ? "'Alice', Georgia, serif" : "Georgia, serif";
+
+      for (const c of cellList) {
+        ctx.save();
+        ctx.translate(c.x, c.y);
+
+        // Sigmally-style area-preserving elastic soft-body ellipse
+        const squishFactor = c.squish || 1.0;
+        const radiusX = c.radius * Math.sqrt(squishFactor);
+        const radiusY = c.radius / Math.sqrt(squishFactor);
+
+        ctx.beginPath();
+        ctx.ellipse(0, 0, radiusX, radiusY, c.squishAngle || 0, 0, Math.PI * 2);
+        ctx.fillStyle = c.color;
         ctx.fill();
 
-        // Stroke ring with local accent color
-        ctx.lineWidth = 3.5;
-        ctx.strokeStyle = isDark ? '#10B981' : '#2563EB';
+        // High contrast borders matching offline mode
+        const isSelf = c.playerId === this.localPlayerId;
+        const borderCol = this.isDarkMode
+          ? (c.color === '#111111' ? '#FFFFFF' : '#0E0F14')
+          : '#111111';
+
+        ctx.strokeStyle = borderCol;
+        ctx.lineWidth = isSelf ? Math.max(3, c.radius * 0.06) : Math.max(2, c.radius * 0.045);
         ctx.stroke();
 
-        // Name text
-        ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = isDark ? '#F3F4F6' : '#111111';
-        ctx.strokeStyle = isDark ? '#000000' : '#FFFFFF';
-        ctx.lineWidth = 3;
-        const name = this.localNickname || 'Player';
-        ctx.strokeText(name, c.x, c.y - radius - 14);
-        ctx.fillText(name, c.x, c.y - radius - 14);
+        // Name & Mass text inside cell matching offline mode
+        if (c.radius > 16) {
+          const fontSize = Math.max(12, Math.floor(c.radius * 0.32));
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
 
-        // Center indicator (YOU / Mass)
-        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
-        ctx.fillStyle = '#FFFFFF';
-        if (radius >= 35) {
-          ctx.fillText(`YOU (${Math.round(c.mass)})`, c.x, c.y);
-        } else if (radius >= 22) {
-          ctx.fillText(Math.round(c.mass), c.x, c.y);
+          const isDarkCell = (c.color !== '#F7F7F5' && c.color !== '#ffffff');
+          const textColor = isDarkCell ? '#FFFFFF' : '#111111';
+          const strokeColor = isDarkCell ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)';
+
+          ctx.font = `700 ${fontSize}px ${fontFam}`;
+          ctx.lineWidth = Math.max(2.5, fontSize * 0.18);
+          ctx.strokeStyle = strokeColor;
+          ctx.fillStyle = textColor;
+
+          if (this.showMass) {
+            ctx.strokeText(c.name, 0, -fontSize * 0.28);
+            ctx.fillText(c.name, 0, -fontSize * 0.28);
+
+            ctx.font = `700 ${Math.floor(fontSize * 0.68)}px system-ui, -apple-system, sans-serif`;
+            ctx.lineWidth = Math.max(2, fontSize * 0.14);
+            ctx.strokeText(Math.round(c.mass), 0, fontSize * 0.65);
+            ctx.fillText(Math.round(c.mass), 0, fontSize * 0.65);
+          } else {
+            ctx.strokeText(c.name, 0, 0);
+            ctx.fillText(c.name, 0, 0);
+          }
         }
 
         ctx.restore();
