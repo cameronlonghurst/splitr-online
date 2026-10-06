@@ -59,8 +59,8 @@ interface FoodPellet {
   color: string;
 }
 
-const MAP_SIZE = 10000;
-const FOOD_COUNT = 1200;
+const MAP_SIZE = 40000;
+const FOOD_COUNT = 3200;
 const BASE_PLAYER_MASS = 25;
 const MAX_PLAYERS = 64;
 const MAX_CELLS_PER_PLAYER = 16;
@@ -72,7 +72,7 @@ const MAX_MESSAGES_PER_SEC = 50;
 const MAX_PAYLOAD_BYTES = 1024;
 
 // Virus & Ejected Pellet Constants
-const VIRUS_COUNT = 36; // Pool of 36 static viruses
+const VIRUS_COUNT = 80; // Pool of 80 static viruses for 40,000x40,000 world
 const BASE_VIRUS_MASS = 100;
 const VIRUS_SPLIT_THRESHOLD = 200; // once fed ~7 pellets exceeding ~200 mass
 const EJECT_MIN_CELL_MASS = 32;
@@ -106,8 +106,8 @@ export class GameRoom extends DurableObject {
     for (let i = 1; i <= FOOD_COUNT; i++) {
       this.foods.set(i, {
         id: i,
-        x: Math.round(Math.random() * (MAP_SIZE - 120) + 60),
-        y: Math.round(Math.random() * (MAP_SIZE - 120) + 60),
+        x: Math.round(Math.random() * (MAP_SIZE - 200) + 100),
+        y: Math.round(Math.random() * (MAP_SIZE - 200) + 100),
         color: FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)]
       });
     }
@@ -121,26 +121,26 @@ export class GameRoom extends DurableObject {
       const id = 'v_' + i;
       this.viruses.set(id, {
         id,
-        x: Math.round(Math.random() * (MAP_SIZE - 1200) + 600),
-        y: Math.round(Math.random() * (MAP_SIZE - 1200) + 600),
+        x: Math.round(Math.random() * (MAP_SIZE - 2400) + 1200),
+        y: Math.round(Math.random() * (MAP_SIZE - 2400) + 1200),
         mass: BASE_VIRUS_MASS
       });
     }
   }
 
   private spawnSafeVirus(id: string): void {
-    let bestX = Math.round(Math.random() * (MAP_SIZE - 1200) + 600);
-    let bestY = Math.round(Math.random() * (MAP_SIZE - 1200) + 600);
+    let bestX = Math.round(Math.random() * (MAP_SIZE - 2400) + 1200);
+    let bestY = Math.round(Math.random() * (MAP_SIZE - 2400) + 1200);
 
-    // Pick location at least 300px away from any active player cell
+    // Pick location at least 450px away from any active player cell
     for (let attempt = 0; attempt < 35; attempt++) {
-      const testX = Math.round(Math.random() * (MAP_SIZE - 1200) + 600);
-      const testY = Math.round(Math.random() * (MAP_SIZE - 1200) + 600);
+      const testX = Math.round(Math.random() * (MAP_SIZE - 2400) + 1200);
+      const testY = Math.round(Math.random() * (MAP_SIZE - 2400) + 1200);
       let safe = true;
       for (const session of this.players.values()) {
         if (session.isDead) continue;
         for (const c of session.cells) {
-          if (Math.hypot(c.x - testX, c.y - testY) < 300) {
+          if (Math.hypot(c.x - testX, c.y - testY) < 450) {
             safe = false;
             break;
           }

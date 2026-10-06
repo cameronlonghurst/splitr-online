@@ -466,7 +466,7 @@ export function getRandomPaletteColor() {
       // Online WebSocket Client & State
       this.onlineClient = new OnlineRoomClient();
       this.isOnlineMode = false;
-      this.onlineMapSize = 10000;
+      this.onlineMapSize = 40000;
       this.onlineFoods = new Map();
       this.onlineViruses = new Map();
       this.onlineEjectedPellets = new Map();
@@ -3222,7 +3222,7 @@ export function getRandomPaletteColor() {
     }
 
     drawGrid(ctx) {
-      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 10000) : MAP_SIZE;
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 40000) : MAP_SIZE;
       const halfW = (this.canvas.width / 2) / this.camZoom;
       const halfH = (this.canvas.height / 2) / this.camZoom;
 
@@ -3251,7 +3251,7 @@ export function getRandomPaletteColor() {
     }
 
     drawBoundaries(ctx) {
-      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 10000) : MAP_SIZE;
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 40000) : MAP_SIZE;
       ctx.strokeStyle = this.isDarkMode ? '#F3F4F6' : '#111111';
       ctx.lineWidth = 8;
       ctx.strokeRect(0, 0, currentMapSize, currentMapSize);
@@ -3533,7 +3533,7 @@ export function getRandomPaletteColor() {
       const h = this.minimapCanvas.height;
 
       mCtx.clearRect(0, 0, w, h);
-      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 10000) : MAP_SIZE;
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 40000) : MAP_SIZE;
       const scale = w / currentMapSize;
 
       mCtx.fillStyle = this.isDarkMode ? '#12131A' : '#FFFFFF';
