@@ -59,8 +59,8 @@ interface FoodPellet {
   color: string;
 }
 
-const MAP_SIZE = 4000;
-const FOOD_COUNT = 500;
+const MAP_SIZE = 10000;
+const FOOD_COUNT = 1200;
 const BASE_PLAYER_MASS = 25;
 const MAX_PLAYERS = 64;
 const MAX_CELLS_PER_PLAYER = 16;
@@ -72,7 +72,7 @@ const MAX_MESSAGES_PER_SEC = 50;
 const MAX_PAYLOAD_BYTES = 1024;
 
 // Virus & Ejected Pellet Constants
-const VIRUS_COUNT = 26; // 20–30 static viruses
+const VIRUS_COUNT = 36; // Pool of 36 static viruses
 const BASE_VIRUS_MASS = 100;
 const VIRUS_SPLIT_THRESHOLD = 200; // once fed ~7 pellets exceeding ~200 mass
 const EJECT_MIN_CELL_MASS = 32;
@@ -91,6 +91,7 @@ export class GameRoom extends DurableObject {
   private foods: Map<number, FoodPellet> = new Map();
   private viruses: Map<string, ServerVirus> = new Map();
   private ejectedPellets: Map<string, ServerEjectedPellet> = new Map();
+  private pendingVirusRespawns: Array<{ id: string; delay: number }> = [];
   private nextFoodId: number = 1;
   private tickInterval: ReturnType<typeof setInterval> | null = null;
 
@@ -115,15 +116,50 @@ export class GameRoom extends DurableObject {
 
   private initViruses(): void {
     this.viruses.clear();
+    this.pendingVirusRespawns = [];
     for (let i = 0; i < VIRUS_COUNT; i++) {
       const id = 'v_' + i;
       this.viruses.set(id, {
         id,
-        x: Math.round(Math.random() * (MAP_SIZE - 600) + 300),
-        y: Math.round(Math.random() * (MAP_SIZE - 600) + 300),
+        x: Math.round(Math.random() * (MAP_SIZE - 1200) + 600),
+        y: Math.round(Math.random() * (MAP_SIZE - 1200) + 600),
         mass: BASE_VIRUS_MASS
       });
     }
+  }
+
+  private spawnSafeVirus(id: string): void {
+    let bestX = Math.round(Math.random() * (MAP_SIZE - 1200) + 600);
+    let bestY = Math.round(Math.random() * (MAP_SIZE - 1200) + 600);
+
+    // Pick location at least 300px away from any active player cell
+    for (let attempt = 0; attempt < 35; attempt++) {
+      const testX = Math.round(Math.random() * (MAP_SIZE - 1200) + 600);
+      const testY = Math.round(Math.random() * (MAP_SIZE - 1200) + 600);
+      let safe = true;
+      for (const session of this.players.values()) {
+        if (session.isDead) continue;
+        for (const c of session.cells) {
+          if (Math.hypot(c.x - testX, c.y - testY) < 300) {
+            safe = false;
+            break;
+          }
+        }
+        if (!safe) break;
+      }
+      if (safe) {
+        bestX = testX;
+        bestY = testY;
+        break;
+      }
+    }
+
+    this.viruses.set(id, {
+      id,
+      x: bestX,
+      y: bestY,
+      mass: BASE_VIRUS_MASS
+    });
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -458,17 +494,20 @@ export class GameRoom extends DurableObject {
     const availableSlots = MAX_CELLS_PER_PLAYER - session.cells.length;
     if (availableSlots <= 0) return;
 
-    const piecesToCreate = Math.min(availableSlots, Math.max(2, Math.floor(cell.mass / 28)));
-    const pieceMass = Math.max(16, Math.floor(cell.mass / (piecesToCreate + 1)));
+    // Explode into equal sub-cells up to the 16-cell cap
+    const piecesToCreate = Math.min(availableSlots, Math.max(2, Math.min(15, Math.floor(cell.mass / 32))));
+    const totalPieces = piecesToCreate + 1;
+    const pieceMass = Math.max(16, Math.floor(cell.mass / totalPieces));
 
     cell.mass = pieceMass;
     const recombineTimer = Math.min(45, Math.max(18, 18 + pieceMass * 0.015));
     cell.recombineTimer = recombineTimer;
 
     const angleStep = (Math.PI * 2) / piecesToCreate;
+    const baseAngle = Math.random() * Math.PI * 2;
     for (let i = 0; i < piecesToCreate; i++) {
-      const a = i * angleStep + Math.random() * 0.2;
-      const popSpeed = 460 + Math.random() * 120;
+      const a = baseAngle + i * angleStep;
+      const popSpeed = 480 + Math.random() * 120;
 
       const child: ServerCell = {
         id: 'c_' + Math.random().toString(36).substring(2, 8),
@@ -505,6 +544,16 @@ export class GameRoom extends DurableObject {
 
     const dt = TICK_INTERVAL_MS / 1000; // 0.05 seconds per tick
     const now = Date.now();
+
+    // 0. Process queued safe virus respawns (5-second delay)
+    for (let i = this.pendingVirusRespawns.length - 1; i >= 0; i--) {
+      this.pendingVirusRespawns[i].delay -= dt;
+      if (this.pendingVirusRespawns[i].delay <= 0) {
+        const item = this.pendingVirusRespawns[i];
+        this.pendingVirusRespawns.splice(i, 1);
+        this.spawnSafeVirus(item.id);
+      }
+    }
 
     // 1. Move cells, decay boost impulse velocities, count down recombine timers
     for (const session of this.players.values()) {
@@ -748,25 +797,25 @@ export class GameRoom extends DurableObject {
         if (!cell) continue;
         const cr = Math.sqrt(cell.mass * 100);
 
-        for (const v of this.viruses.values()) {
+        for (const v of Array.from(this.viruses.values())) {
           // If cell is small (mass < virus.mass): haven/shield, small cells pass safely under
           if (cell.mass < v.mass) {
             continue;
           }
 
-          // If cell is big (mass > virus.mass * 1.15): consumes virus, pops into multiple cells
-          if (cell.mass > v.mass * 1.15) {
+          // If cell is big (mass >= 132 and > virus.mass * 1.15): consumes virus, pops into multiple cells
+          if (cell.mass >= 132 && cell.mass > v.mass * 1.15) {
             const dist = Math.hypot(cell.x - v.x, cell.y - v.y);
             if (dist < cr) {
               cell.mass += v.mass;
               this.popCellOnVirus(session, cell);
 
-              // Respawn consumed virus at new random coordinate
-              v.x = Math.round(Math.random() * (MAP_SIZE - 600) + 300);
-              v.y = Math.round(Math.random() * (MAP_SIZE - 600) + 300);
-              v.mass = BASE_VIRUS_MASS;
-              v.vx = 0;
-              v.vy = 0;
+              // Remove consumed virus and queue safe respawn after 5-second delay
+              this.viruses.delete(v.id);
+              this.pendingVirusRespawns.push({
+                id: 'v_' + Math.random().toString(36).substring(2, 8),
+                delay: 5.0
+              });
               break;
             }
           }

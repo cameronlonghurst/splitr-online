@@ -466,7 +466,7 @@ export function getRandomPaletteColor() {
       // Online WebSocket Client & State
       this.onlineClient = new OnlineRoomClient();
       this.isOnlineMode = false;
-      this.onlineMapSize = 4000;
+      this.onlineMapSize = 10000;
       this.onlineFoods = new Map();
       this.onlineViruses = new Map();
       this.onlineEjectedPellets = new Map();
@@ -2924,15 +2924,31 @@ export function getRandomPaletteColor() {
       this.drawGrid(ctx);
       this.drawBoundaries(ctx);
       if (this.isOnlineMode) {
+        const cellList = this.getOnlineCellList();
+        // 1. Draw food pellets and ejected mass
         this.drawOnlineFoods(ctx);
         this.drawOnlineEjectedMasses(ctx);
+        // 2. Draw all player cells that have radius < virus.radius (small cells render beneath viruses so they can hide inside)
+        this.drawOnlineCellsBelowViruses(ctx, cellList);
+        // 3. Draw viruses (green spiked circles)
         this.drawOnlineViruses(ctx);
-        this.drawOnlinePlayers(ctx);
+        // 4. Draw all player cells that have radius >= virus.radius
+        this.drawOnlineCellsAboveViruses(ctx, cellList);
+        // 5. Draw text labels, masses, and cell outlines
+        this.drawOnlineCellOverlays(ctx, cellList);
       } else {
+        const cellList = this.getOfflineCellList();
+        // 1. Draw food pellets and ejected mass
         this.drawFoods(ctx);
         this.drawEjectedMasses(ctx);
+        // 2. Draw all player cells that have radius < virus.radius (small cells render beneath viruses so they can hide inside)
+        this.drawCellsBelowViruses(ctx, cellList);
+        // 3. Draw viruses (green spiked circles)
         this.drawViruses(ctx);
-        this.drawCells(ctx);
+        // 4. Draw all player cells that have radius >= virus.radius
+        this.drawCellsAboveViruses(ctx, cellList);
+        // 5. Draw text labels, masses, and cell outlines
+        this.drawCellOverlays(ctx, cellList);
       }
 
       ctx.restore();
@@ -3031,7 +3047,7 @@ export function getRandomPaletteColor() {
       }
     }
 
-    drawOnlinePlayers(ctx) {
+    getOnlineCellList() {
       const cellList = [];
 
       // Collect remote player cells
@@ -3070,14 +3086,18 @@ export function getRandomPaletteColor() {
 
       // Sort cells by mass: smaller rendered underneath, larger rendered on top
       cellList.sort((a, b) => a.mass - b.mass);
+      return cellList;
+    }
 
-      const fontFam = this.fontReady ? "'Alice', Georgia, serif" : "Georgia, serif";
+    drawOnlineCellsBelowViruses(ctx, cellList) {
+      const VIRUS_RADIUS = 100;
 
       for (const c of cellList) {
+        if (c.radius >= VIRUS_RADIUS) continue;
+
         ctx.save();
         ctx.translate(c.x, c.y);
 
-        // Sigmally-style area-preserving elastic soft-body ellipse
         const squishFactor = c.squish || 1.0;
         const radiusX = c.radius * Math.sqrt(squishFactor);
         const radiusY = c.radius / Math.sqrt(squishFactor);
@@ -3087,10 +3107,71 @@ export function getRandomPaletteColor() {
         ctx.fillStyle = c.color;
         ctx.fill();
 
-        // Clean, solid black outline (#000000) with prominent stroke width
+        // Clean solid black outline underneath virus
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = Math.max(3, c.radius * 0.06);
         ctx.stroke();
+
+        ctx.restore();
+      }
+    }
+
+    drawOnlineCellsAboveViruses(ctx, cellList) {
+      const VIRUS_RADIUS = 100;
+
+      for (const c of cellList) {
+        if (c.radius < VIRUS_RADIUS) continue;
+
+        ctx.save();
+        ctx.translate(c.x, c.y);
+
+        const squishFactor = c.squish || 1.0;
+        const radiusX = c.radius * Math.sqrt(squishFactor);
+        const radiusY = c.radius / Math.sqrt(squishFactor);
+
+        ctx.beginPath();
+        ctx.ellipse(0, 0, radiusX, radiusY, c.squishAngle || 0, 0, Math.PI * 2);
+        ctx.fillStyle = c.color;
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    drawOnlineCellOverlays(ctx, cellList) {
+      const VIRUS_RADIUS = 100;
+      const fontFam = this.fontReady ? "'Alice', Georgia, serif" : "Georgia, serif";
+
+      for (const c of cellList) {
+        const isSmall = c.radius < VIRUS_RADIUS;
+
+        // Check if small cell is currently hiding inside any active virus
+        let isInsideVirus = false;
+        if (isSmall) {
+          for (const v of this.onlineViruses.values()) {
+            if (Math.hypot(c.x - v.x, c.y - v.y) < (v.radius || 100)) {
+              isInsideVirus = true;
+              break;
+            }
+          }
+        }
+        if (isInsideVirus) continue; // Safely concealed inside the virus!
+
+        ctx.save();
+        ctx.translate(c.x, c.y);
+
+        const squishFactor = c.squish || 1.0;
+        const radiusX = c.radius * Math.sqrt(squishFactor);
+        const radiusY = c.radius / Math.sqrt(squishFactor);
+
+        // Outlines for cells above viruses
+        if (!isSmall) {
+          ctx.beginPath();
+          ctx.ellipse(0, 0, radiusX, radiusY, c.squishAngle || 0, 0, Math.PI * 2);
+          ctx.strokeStyle = '#000000';
+          ctx.lineWidth = Math.max(3, c.radius * 0.06);
+          ctx.stroke();
+        }
 
         // In-cell names & mass scaling strictly inside boundaries
         if (c.radius >= 18) {
@@ -3108,7 +3189,6 @@ export function getRandomPaletteColor() {
             ctx.font = `700 ${fontSize}px ${fontFam}`;
           }
 
-          // If cell is too tiny to fit legibly, omit text
           if (fontSize >= 9) {
             ctx.lineWidth = Math.max(2, fontSize * 0.16);
             ctx.strokeStyle = '#000000';
@@ -3134,8 +3214,15 @@ export function getRandomPaletteColor() {
       }
     }
 
+    drawOnlinePlayers(ctx) {
+      const cellList = this.getOnlineCellList();
+      this.drawOnlineCellsBelowViruses(ctx, cellList);
+      this.drawOnlineCellsAboveViruses(ctx, cellList);
+      this.drawOnlineCellOverlays(ctx, cellList);
+    }
+
     drawGrid(ctx) {
-      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 4000) : MAP_SIZE;
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 10000) : MAP_SIZE;
       const halfW = (this.canvas.width / 2) / this.camZoom;
       const halfH = (this.canvas.height / 2) / this.camZoom;
 
@@ -3164,7 +3251,7 @@ export function getRandomPaletteColor() {
     }
 
     drawBoundaries(ctx) {
-      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 4000) : MAP_SIZE;
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 10000) : MAP_SIZE;
       ctx.strokeStyle = this.isDarkMode ? '#F3F4F6' : '#111111';
       ctx.lineWidth = 8;
       ctx.strokeRect(0, 0, currentMapSize, currentMapSize);
@@ -3237,20 +3324,24 @@ export function getRandomPaletteColor() {
       }
     }
 
-    drawCells(ctx) {
+    getOfflineCellList() {
       const cellList = [];
       for (const p of this.players.values()) {
         for (const c of p.cells) cellList.push(c);
       }
       cellList.sort((a, b) => a.mass - b.mass);
+      return cellList;
+    }
 
-      const fontFam = this.fontReady ? "'Alice', Georgia, serif" : "Georgia, serif";
+    drawCellsBelowViruses(ctx, cellList) {
+      const VIRUS_RADIUS = 100;
 
       for (const c of cellList) {
+        if (c.radius >= VIRUS_RADIUS) continue;
+
         ctx.save();
         ctx.translate(c.x, c.y);
 
-        // Sigmally-style area-preserving elastic soft-body ellipse
         const squishFactor = c.squish || 1.0;
         const radiusX = c.radius * Math.sqrt(squishFactor);
         const radiusY = c.radius / Math.sqrt(squishFactor);
@@ -3260,7 +3351,6 @@ export function getRandomPaletteColor() {
         ctx.fillStyle = c.color;
         ctx.fill();
 
-        // High contrast borders
         const isSelf = c.playerId === this.localPlayerId;
         const borderCol = this.isDarkMode
           ? (c.color === '#111111' ? '#FFFFFF' : '#0E0F14')
@@ -3270,7 +3360,70 @@ export function getRandomPaletteColor() {
         ctx.lineWidth = isSelf ? Math.max(3, c.radius * 0.06) : Math.max(2, c.radius * 0.045);
         ctx.stroke();
 
-        // Name & Mass text inside cell
+        ctx.restore();
+      }
+    }
+
+    drawCellsAboveViruses(ctx, cellList) {
+      const VIRUS_RADIUS = 100;
+
+      for (const c of cellList) {
+        if (c.radius < VIRUS_RADIUS) continue;
+
+        ctx.save();
+        ctx.translate(c.x, c.y);
+
+        const squishFactor = c.squish || 1.0;
+        const radiusX = c.radius * Math.sqrt(squishFactor);
+        const radiusY = c.radius / Math.sqrt(squishFactor);
+
+        ctx.beginPath();
+        ctx.ellipse(0, 0, radiusX, radiusY, c.squishAngle || 0, 0, Math.PI * 2);
+        ctx.fillStyle = c.color;
+        ctx.fill();
+
+        ctx.restore();
+      }
+    }
+
+    drawCellOverlays(ctx, cellList) {
+      const VIRUS_RADIUS = 100;
+      const fontFam = this.fontReady ? "'Alice', Georgia, serif" : "Georgia, serif";
+
+      for (const c of cellList) {
+        const isSmall = c.radius < VIRUS_RADIUS;
+
+        let isInsideVirus = false;
+        if (isSmall) {
+          for (const v of this.viruses) {
+            if (Math.hypot(c.x - v.x, c.y - v.y) < v.radius) {
+              isInsideVirus = true;
+              break;
+            }
+          }
+        }
+        if (isInsideVirus) continue;
+
+        ctx.save();
+        ctx.translate(c.x, c.y);
+
+        const squishFactor = c.squish || 1.0;
+        const radiusX = c.radius * Math.sqrt(squishFactor);
+        const radiusY = c.radius / Math.sqrt(squishFactor);
+
+        if (!isSmall) {
+          const isSelf = c.playerId === this.localPlayerId;
+          const borderCol = this.isDarkMode
+            ? (c.color === '#111111' ? '#FFFFFF' : '#0E0F14')
+            : '#111111';
+
+          ctx.beginPath();
+          ctx.ellipse(0, 0, radiusX, radiusY, c.squishAngle || 0, 0, Math.PI * 2);
+          ctx.strokeStyle = borderCol;
+          ctx.lineWidth = isSelf ? Math.max(3, c.radius * 0.06) : Math.max(2, c.radius * 0.045);
+          ctx.stroke();
+        }
+
         if (c.radius > 16) {
           const fontSize = Math.max(12, Math.floor(c.radius * 0.32));
           ctx.textAlign = 'center';
@@ -3301,6 +3454,13 @@ export function getRandomPaletteColor() {
 
         ctx.restore();
       }
+    }
+
+    drawCells(ctx) {
+      const cellList = this.getOfflineCellList();
+      this.drawCellsBelowViruses(ctx, cellList);
+      this.drawCellsAboveViruses(ctx, cellList);
+      this.drawCellOverlays(ctx, cellList);
     }
 
     updateLeaderboard() {
@@ -3373,7 +3533,7 @@ export function getRandomPaletteColor() {
       const h = this.minimapCanvas.height;
 
       mCtx.clearRect(0, 0, w, h);
-      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 4000) : MAP_SIZE;
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 10000) : MAP_SIZE;
       const scale = w / currentMapSize;
 
       mCtx.fillStyle = this.isDarkMode ? '#12131A' : '#FFFFFF';
