@@ -3199,7 +3199,7 @@ export function getRandomPaletteColor() {
               ctx.strokeText(c.name, 0, -fontSize * 0.28);
               ctx.fillText(c.name, 0, -fontSize * 0.28);
 
-              ctx.font = `700 ${massFontSize}px system-ui, -apple-system, sans-serif`;
+              ctx.font = `700 ${massFontSize}px ${fontFam}`;
               ctx.lineWidth = Math.max(1.8, massFontSize * 0.14);
               ctx.strokeText(Math.round(c.mass), 0, fontSize * 0.62);
               ctx.fillText(Math.round(c.mass), 0, fontSize * 0.62);
@@ -3442,7 +3442,7 @@ export function getRandomPaletteColor() {
             ctx.strokeText(c.name, 0, -fontSize * 0.28);
             ctx.fillText(c.name, 0, -fontSize * 0.28);
 
-            ctx.font = `700 ${Math.floor(fontSize * 0.68)}px system-ui, -apple-system, sans-serif`;
+            ctx.font = `700 ${Math.floor(fontSize * 0.68)}px ${fontFam}`;
             ctx.lineWidth = Math.max(2, fontSize * 0.14);
             ctx.strokeText(Math.round(c.mass), 0, fontSize * 0.65);
             ctx.fillText(Math.round(c.mass), 0, fontSize * 0.65);

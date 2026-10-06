@@ -1,1 +1,5 @@
 @import "tailwindcss";
+
+*, *::before, *::after, html, body, input, button, select, textarea {
+  font-family: 'Alice', Georgia, serif !important;
+}

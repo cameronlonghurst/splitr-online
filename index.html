@@ -42,7 +42,17 @@
       tailwind.config = {
         darkMode: 'class',
         theme: {
+          fontFamily: {
+            serif: ["'Alice'", 'Georgia', 'serif'],
+            sans: ["'Alice'", 'Georgia', 'serif'],
+            mono: ["'Alice'", 'Georgia', 'serif']
+          },
           extend: {
+            fontFamily: {
+              serif: ["'Alice'", 'Georgia', 'serif'],
+              sans: ["'Alice'", 'Georgia', 'serif'],
+              mono: ["'Alice'", 'Georgia', 'serif']
+            },
             colors: {
               darkbg: '#0E0F14',
               darkcard: '#161720',
@@ -55,15 +65,14 @@
     </script>
 
     <style>
-      * {
-        font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      *, *::before, *::after, html, body, input, button, select, textarea, div, span, p, h1, h2, h3, h4, kbd, form, label, code, pre {
+        font-family: 'Alice', Georgia, serif !important;
         box-sizing: border-box;
       }
-      .font-serif, .serif-font {
-        font-family: 'Alice', Georgia, serif;
+      .font-serif, .serif-font, .font-sans, .font-mono {
+        font-family: 'Alice', Georgia, serif !important;
       }
       .font-mono {
-        font-family: system-ui, -apple-system, sans-serif;
         font-variant-numeric: tabular-nums;
       }
 
@@ -296,7 +305,7 @@
           type="text"
           maxlength="80"
           placeholder="Press / or Enter to chat..."
-          class="bg-transparent text-[#111111] dark:text-white placeholder-zinc-400 text-xs focus:outline-none w-full font-sans"
+          class="bg-transparent text-[#111111] dark:text-white placeholder-zinc-400 text-xs focus:outline-none w-full font-serif"
         />
       </form>
     </div>
@@ -430,9 +439,8 @@
 
             <!-- Right: Even Form Stack -->
             <div class="flex-1 flex flex-col gap-2 min-w-0">
-              <div class="flex items-center justify-between text-xs font-mono text-zinc-500 dark:text-zinc-400 px-0.5">
-                <span class="font-bold uppercase tracking-wider text-[10px]">Nickname</span>
-                <span class="text-[10px] text-zinc-400">8 Palette Colors</span>
+              <div class="flex items-center text-xs text-zinc-500 dark:text-zinc-400 px-0.5">
+                <span class="font-bold uppercase tracking-wider text-[11px] font-serif">Nickname</span>
               </div>
               <div class="flex items-center gap-2">
                 <input
@@ -441,18 +449,18 @@
                   maxlength="16"
                   value="Player"
                   placeholder="Your nickname..."
-                  class="h-11 flex-1 border border-[#111111] dark:border-zinc-700 rounded-lg px-3.5 text-sm font-bold text-[#111111] dark:text-white bg-white dark:bg-[#1A1B24] focus:outline-none focus:ring-1 focus:ring-[#111111] dark:focus:ring-white transition-all shadow-sm"
+                  class="h-11 flex-1 font-serif border border-[#111111] dark:border-zinc-700 rounded-lg px-3.5 text-sm font-bold text-[#111111] dark:text-white bg-white dark:bg-[#1A1B24] focus:outline-none focus:ring-1 focus:ring-[#111111] dark:focus:ring-white transition-all shadow-sm"
                 />
                 <button
                   id="btnRandomName"
                   type="button"
-                  class="h-11 px-3.5 border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-[#1A1B24] hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer transition-colors shrink-0 shadow-sm"
+                  class="h-11 px-3.5 font-serif border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-[#1A1B24] hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer transition-colors shrink-0 shadow-sm"
                   title="Generate Brainrot Nickname"
                 >
                   Random
                 </button>
               </div>
-              <div class="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 px-0.5">
+              <div class="text-[11px] font-serif text-zinc-400 dark:text-zinc-500 px-0.5">
                 Press Enter to join immediately
               </div>
             </div>
@@ -466,19 +474,19 @@
             <div class="relative group">
               <button
                 id="btnPlayOnline"
-                class="w-full h-full min-h-[92px] p-4 bg-[#111111] dark:bg-black hover:bg-zinc-900 text-white rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer shadow-md hover:shadow-lg transition-all border border-[#111111] dark:border-zinc-700"
+                class="w-full h-full min-h-[92px] p-4 font-serif bg-[#111111] dark:bg-black hover:bg-zinc-900 text-white rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer shadow-md hover:shadow-lg transition-all border border-[#111111] dark:border-zinc-700"
               >
                 <span class="text-base font-bold text-white flex items-center gap-2">
                   <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                   Play Online
                 </span>
-                <span id="btnOnlineSubtext" class="text-xs font-mono text-zinc-300">
+                <span id="btnOnlineSubtext" class="text-xs text-zinc-300">
                   Public Arena · <span id="onlinePlayerCountBadge">Live</span>
                 </span>
               </button>
 
               <!-- Live Player Count Tooltip on Hover -->
-              <div id="onlineTooltip" class="absolute -top-9 left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-black/95 text-white text-[11px] font-mono px-3 py-1 rounded-md shadow-xl whitespace-nowrap z-30 border border-zinc-700 flex items-center gap-2">
+              <div id="onlineTooltip" class="absolute -top-9 left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-black/95 text-white text-[11px] font-serif px-3 py-1 rounded-md shadow-xl whitespace-nowrap z-30 border border-zinc-700 flex items-center gap-2">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
                 <span id="onlineCountTooltipText">Connecting to arena...</span>
               </div>
@@ -487,13 +495,13 @@
             <!-- Play Offline (Box 2 - Matching Dimensions & Symmetry) -->
             <button
               id="btnPlayNormal"
-              class="w-full h-full min-h-[92px] p-4 bg-white dark:bg-[#1A1B24] hover:bg-zinc-100 dark:hover:bg-[#222430] text-[#111111] dark:text-white rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:shadow transition-all border border-zinc-300 dark:border-zinc-700"
+              class="w-full h-full min-h-[92px] p-4 font-serif bg-white dark:bg-[#1A1B24] hover:bg-zinc-100 dark:hover:bg-[#222430] text-[#111111] dark:text-white rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:shadow transition-all border border-zinc-300 dark:border-zinc-700"
             >
               <span class="text-base font-bold text-[#111111] dark:text-white flex items-center gap-2">
                 <span class="w-2.5 h-2.5 rounded-full bg-zinc-400 dark:bg-zinc-500"></span>
                 Play Offline
               </span>
-              <span class="text-xs font-mono text-zinc-500 dark:text-zinc-400">
+              <span class="text-xs text-zinc-500 dark:text-zinc-400">
                 Solo Practice · Bots
               </span>
             </button>
