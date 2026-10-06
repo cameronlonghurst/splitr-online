@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Alice&amp;display=swap');
+    .serif-icon {
+      font-family: 'Alice', 'Times New Roman', Georgia, serif;
+      font-weight: 700;
+      font-size: 200px;
+      fill: #111111;
+      text-anchor: middle;
+      dominant-baseline: central;
+    }
+  </style>
+  <text x="128" y="136" class="serif-icon">S</text>
+</svg>

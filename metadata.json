@@ -1,0 +1,8 @@
+{
+  "name": "Splitr Fork",
+  "description": "Imported from GitHub: cameronlonghurst/splitr",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
