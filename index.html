@@ -365,7 +365,7 @@
 
       <!-- Main Spacious Content Grid -->
       <main class="flex-1 flex items-center justify-center p-3 md:p-6 lg:p-8">
-        <div class="w-full max-w-[530px] editorial-card p-6 sm:p-7 animate-menu-reveal flex flex-col gap-5">
+        <div class="w-full max-w-[520px] editorial-card p-6 sm:p-7 animate-menu-reveal flex flex-col gap-4">
 
           <!-- ROUND SUMMARY BANNER (Shown cleanly after death) -->
           <div id="lobbyRoundSummary" class="hidden p-3.5 bg-[#F7F7F5] dark:bg-[#111218] border border-[#111111] dark:border-zinc-700 rounded-xl flex flex-col gap-2.5">
@@ -379,23 +379,23 @@
               <span class="text-[11px] font-mono text-zinc-500 uppercase tracking-wider">Round Over</span>
             </div>
 
-            <!-- 4 Clean Stat Tiles -->
-            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-              <div class="bg-white dark:bg-[#161720] p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center">
+            <!-- 4 Clean Even Stat Tiles -->
+            <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-mono">
+              <div class="bg-white dark:bg-[#161720] p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center flex flex-col justify-center">
                 <div class="text-[9px] uppercase font-bold tracking-wider text-zinc-500 mb-0.5">Peak Mass</div>
-                <div id="summaryPeakMass" class="text-lg font-bold text-[#111111] dark:text-white">0</div>
+                <div id="summaryPeakMass" class="text-base font-bold text-[#111111] dark:text-white">0</div>
               </div>
-              <div class="bg-white dark:bg-[#161720] p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center">
+              <div class="bg-white dark:bg-[#161720] p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center flex flex-col justify-center">
                 <div class="text-[9px] uppercase font-bold tracking-wider text-zinc-500 mb-0.5">Score</div>
-                <div id="summaryScore" class="text-lg font-bold text-[#111111] dark:text-white">0</div>
+                <div id="summaryScore" class="text-base font-bold text-[#111111] dark:text-white">0</div>
               </div>
-              <div class="bg-white dark:bg-[#161720] p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center">
+              <div class="bg-white dark:bg-[#161720] p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center flex flex-col justify-center">
                 <div class="text-[9px] uppercase font-bold tracking-wider text-zinc-500 mb-0.5">Pellets</div>
-                <div id="summaryFoodEaten" class="text-lg font-bold text-[#111111] dark:text-white">0</div>
+                <div id="summaryFoodEaten" class="text-base font-bold text-[#111111] dark:text-white">0</div>
               </div>
-              <div class="bg-white dark:bg-[#161720] p-2 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center">
+              <div class="bg-white dark:bg-[#161720] p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center flex flex-col justify-center">
                 <div class="text-[9px] uppercase font-bold tracking-wider text-zinc-500 mb-0.5">Time</div>
-                <div id="summaryTimeSurvived" class="text-lg font-bold text-[#111111] dark:text-white">0s</div>
+                <div id="summaryTimeSurvived" class="text-base font-bold text-[#111111] dark:text-white">0s</div>
               </div>
             </div>
           </div>
@@ -413,23 +413,27 @@
           </div>
 
           <!-- ============================================== -->
-          <!-- PLAYER SETUP (BIG BLOB PREVIEW LEFT, NAME/TONE RIGHT) -->
+          <!-- PLAYER SETUP (EVEN, BALANCED BOX)              -->
           <!-- ============================================== -->
-          <div class="flex items-center gap-6 p-5 bg-zinc-50 dark:bg-[#12131A] rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-sm">
-            <!-- Left: Prominent Big Avatar Preview Blob (~1.35x Scale) -->
+          <div class="p-4.5 sm:p-5 bg-zinc-50/90 dark:bg-[#12131A] rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center gap-5">
+            <!-- Left: Avatar Preview Blob -->
             <div
               id="previewCellAvatar"
-              class="w-32 h-32 sm:w-36 sm:h-36 rounded-full border-[3px] border-[#111111] dark:border-white flex items-center justify-center text-white shrink-0 shadow-lg transition-transform duration-300 animate-avatar-pulse overflow-hidden cursor-pointer"
+              class="w-24 h-24 sm:w-28 sm:h-28 rounded-full border-2 border-[#111111] dark:border-white flex items-center justify-center text-white shrink-0 shadow-md transition-transform duration-300 animate-avatar-pulse overflow-hidden cursor-pointer"
               title="Your Cell Blob"
               style="background-color: #111111;"
             >
-              <div id="previewCellName" class="font-serif text-base sm:text-lg font-bold tracking-tight truncate max-w-[105px] sm:max-w-[125px] text-center px-2">
+              <div id="previewCellName" class="font-serif text-sm sm:text-base font-bold tracking-tight truncate max-w-[86px] sm:max-w-[100px] text-center px-1">
                 Player
               </div>
             </div>
 
-            <!-- Right: Name Input + Randomizer -->
-            <div class="flex-1 flex flex-col gap-2.5 min-w-0">
+            <!-- Right: Even Form Stack -->
+            <div class="flex-1 flex flex-col gap-2 min-w-0">
+              <div class="flex items-center justify-between text-xs font-mono text-zinc-500 dark:text-zinc-400 px-0.5">
+                <span class="font-bold uppercase tracking-wider text-[10px]">Nickname</span>
+                <span class="text-[10px] text-zinc-400">8 Palette Colors</span>
+              </div>
               <div class="flex items-center gap-2">
                 <input
                   id="inputNickname"
@@ -437,38 +441,38 @@
                   maxlength="16"
                   value="Player"
                   placeholder="Your nickname..."
-                  class="flex-1 border border-[#111111] dark:border-zinc-700 rounded-xl px-3.5 py-2.5 text-sm sm:text-base font-bold text-[#111111] dark:text-white bg-white dark:bg-[#1A1B24] focus:outline-none focus:ring-2 focus:ring-[#111111] dark:focus:ring-white transition-all shadow-sm"
+                  class="h-11 flex-1 border border-[#111111] dark:border-zinc-700 rounded-lg px-3.5 text-sm font-bold text-[#111111] dark:text-white bg-white dark:bg-[#1A1B24] focus:outline-none focus:ring-1 focus:ring-[#111111] dark:focus:ring-white transition-all shadow-sm"
                 />
                 <button
                   id="btnRandomName"
                   type="button"
-                  class="px-3.5 py-2.5 border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-[#1A1B24] hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs sm:text-sm font-bold text-zinc-700 dark:text-zinc-300 rounded-xl cursor-pointer transition-colors shrink-0 shadow-sm"
+                  class="h-11 px-3.5 border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-[#1A1B24] hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer transition-colors shrink-0 shadow-sm"
                   title="Generate Brainrot Nickname"
                 >
                   Random
                 </button>
               </div>
-              <div class="text-[11px] font-mono text-zinc-400 dark:text-zinc-500 px-0.5">
-                Press Enter to spawn immediately
+              <div class="text-[10px] font-mono text-zinc-400 dark:text-zinc-500 px-0.5">
+                Press Enter to join immediately
               </div>
             </div>
           </div>
 
           <!-- ============================================== -->
-          <!-- PRIMARY MODES: PLAY ONLINE & PLAY OFFLINE      -->
+          <!-- PRIMARY MODES: EVEN BALANCED 2-COLUMN BOXES    -->
           <!-- ============================================== -->
-          <div class="flex flex-col sm:flex-row items-stretch gap-3.5">
-            <!-- Play Online (Prominent Width, Black #000000, Tooltip on Hover) -->
-            <div class="relative group flex-[1.6]">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-stretch pt-2 sm:pt-3">
+            <!-- Play Online (Box 1) -->
+            <div class="relative group">
               <button
                 id="btnPlayOnline"
-                class="w-full py-4.5 px-6 bg-[#000000] hover:bg-zinc-900 text-white rounded-2xl text-lg font-black tracking-wide flex flex-col items-center justify-center gap-1 cursor-pointer shadow-lg transition-all border border-black"
+                class="w-full h-full min-h-[92px] p-4 bg-[#111111] dark:bg-black hover:bg-zinc-900 text-white rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer shadow-md hover:shadow-lg transition-all border border-[#111111] dark:border-zinc-700"
               >
-                <span class="text-base sm:text-lg font-black text-white flex items-center gap-2">
+                <span class="text-base font-bold text-white flex items-center gap-2">
                   <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
                   Play Online
                 </span>
-                <span id="btnOnlineSubtext" class="text-xs font-medium text-zinc-300">
+                <span id="btnOnlineSubtext" class="text-xs font-mono text-zinc-300">
                   Public Arena · <span id="onlinePlayerCountBadge">Live</span>
                 </span>
               </button>
@@ -480,23 +484,18 @@
               </div>
             </div>
 
-            <!-- Play Offline (White #ffffff, Dark Text, Noticeably Smaller/Shorter Width) -->
+            <!-- Play Offline (Box 2 - Matching Dimensions & Symmetry) -->
             <button
               id="btnPlayNormal"
-              class="flex-[0.9] py-4 px-4 bg-[#ffffff] hover:bg-zinc-100 dark:bg-white dark:hover:bg-zinc-200 text-[#111111] border border-zinc-300 dark:border-zinc-400 rounded-2xl text-sm font-bold tracking-normal flex flex-col items-center justify-center gap-0.5 cursor-pointer shadow-sm transition-all"
+              class="w-full h-full min-h-[92px] p-4 bg-white dark:bg-[#1A1B24] hover:bg-zinc-100 dark:hover:bg-[#222430] text-[#111111] dark:text-white rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:shadow transition-all border border-zinc-300 dark:border-zinc-700"
             >
-              <span class="text-sm font-bold text-[#111111]">Play Offline</span>
-              <span class="text-[11px] font-normal text-zinc-500">Solo with Bots</span>
-            </button>
-          </div>
-
-          <!-- Secondary Spectate Action -->
-          <div class="flex items-center justify-center pt-1">
-            <button
-              id="btnSpectate"
-              class="text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-300 font-mono transition-colors cursor-pointer"
-            >
-              Spectate Bots
+              <span class="text-base font-bold text-[#111111] dark:text-white flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-zinc-400 dark:bg-zinc-500"></span>
+                Play Offline
+              </span>
+              <span class="text-xs font-mono text-zinc-500 dark:text-zinc-400">
+                Solo Practice · Bots
+              </span>
             </button>
           </div>
 
