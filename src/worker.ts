@@ -17,6 +17,27 @@ interface ServerCell {
   recombineTimer: number; // countdown in seconds
 }
 
+interface ServerVirus {
+  id: string;
+  x: number;
+  y: number;
+  mass: number;
+  vx?: number;
+  vy?: number;
+}
+
+interface ServerEjectedPellet {
+  id: string;
+  ownerId: string;
+  x: number;
+  y: number;
+  vx: number;
+  vy: number;
+  mass: number;
+  color: string;
+  createdAt: number;
+}
+
 interface PlayerSession {
   id: string;
   ws: WebSocket;
@@ -28,6 +49,7 @@ interface PlayerSession {
   isDead: boolean;
   lastMsgTime: number;
   msgCount: number;
+  lastEjectTime: number;
 }
 
 interface FoodPellet {
@@ -49,6 +71,16 @@ const RATE_LIMIT_WINDOW_MS = 1000;
 const MAX_MESSAGES_PER_SEC = 50;
 const MAX_PAYLOAD_BYTES = 1024;
 
+// Virus & Ejected Pellet Constants
+const VIRUS_COUNT = 26; // 20–30 static viruses
+const BASE_VIRUS_MASS = 100;
+const VIRUS_SPLIT_THRESHOLD = 200; // once fed ~7 pellets exceeding ~200 mass
+const EJECT_MIN_CELL_MASS = 32;
+const EJECT_MASS_COST = 16;
+const EJECT_PELLET_MASS = 15;
+const EJECT_IMPULSE = 800; // initial launch velocity ~800 px/s
+const EJECT_RATE_LIMIT_MS = 110; // ~9 shots/s
+
 const FOOD_COLORS = [
   '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
   '#EC4899', '#06B6D4', '#14B8A6', '#6366F1', '#F97316'
@@ -57,12 +89,15 @@ const FOOD_COLORS = [
 export class GameRoom extends DurableObject {
   private players: Map<string, PlayerSession> = new Map();
   private foods: Map<number, FoodPellet> = new Map();
+  private viruses: Map<string, ServerVirus> = new Map();
+  private ejectedPellets: Map<string, ServerEjectedPellet> = new Map();
   private nextFoodId: number = 1;
   private tickInterval: ReturnType<typeof setInterval> | null = null;
 
   constructor(ctx: DurableObjectState, env: Env) {
     super(ctx, env);
     this.initFoods();
+    this.initViruses();
   }
 
   private initFoods(): void {
@@ -78,6 +113,19 @@ export class GameRoom extends DurableObject {
     this.nextFoodId = FOOD_COUNT + 1;
   }
 
+  private initViruses(): void {
+    this.viruses.clear();
+    for (let i = 0; i < VIRUS_COUNT; i++) {
+      const id = 'v_' + i;
+      this.viruses.set(id, {
+        id,
+        x: Math.round(Math.random() * (MAP_SIZE - 600) + 300),
+        y: Math.round(Math.random() * (MAP_SIZE - 600) + 300),
+        mass: BASE_VIRUS_MASS
+      });
+    }
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
@@ -90,6 +138,7 @@ export class GameRoom extends DurableObject {
           room: 'public',
           mapSize: MAP_SIZE,
           foodCount: this.foods.size,
+          virusCount: this.viruses.size,
           connectedPlayers: this.players.size,
           maxPlayers: MAX_PLAYERS,
           protocol: 'Splitr-WebSocket-v1'
@@ -140,12 +189,13 @@ export class GameRoom extends DurableObject {
       cells: [firstCell],
       isDead: false,
       lastMsgTime: Date.now(),
-      msgCount: 0
+      msgCount: 0,
+      lastEjectTime: 0
     };
 
     this.players.set(playerId, session);
 
-    // Send full initial state: map size, player id, all food pellets, existing players
+    // Send full initial state: map size, player id, all food pellets, viruses, ejected pellets, existing players
     try {
       serverWs.send(
         JSON.stringify({
@@ -154,6 +204,8 @@ export class GameRoom extends DurableObject {
           mapSize: MAP_SIZE,
           spawn: { x: initialSpawnX, y: initialSpawnY },
           foods: Array.from(this.foods.values()),
+          viruses: this.serializeViruses(),
+          ejected: this.serializeEjected(),
           players: this.serializePlayers()
         })
       );
@@ -206,6 +258,25 @@ export class GameRoom extends DurableObject {
       }));
   }
 
+  private serializeViruses() {
+    return Array.from(this.viruses.values()).map((v) => ({
+      id: v.id,
+      x: Math.round(v.x),
+      y: Math.round(v.y),
+      mass: Math.round(v.mass)
+    }));
+  }
+
+  private serializeEjected() {
+    return Array.from(this.ejectedPellets.values()).map((ep) => ({
+      id: ep.id,
+      x: Math.round(ep.x),
+      y: Math.round(ep.y),
+      color: ep.color,
+      mass: ep.mass
+    }));
+  }
+
   private handlePlayerMessage(playerId: string, rawData: unknown): void {
     const session = this.players.get(playerId);
     if (!session) return;
@@ -252,6 +323,8 @@ export class GameRoom extends DurableObject {
       }
     } else if (parsed.type === 'split') {
       this.handleSplit(session);
+    } else if (parsed.type === 'eject') {
+      this.handleEject(session);
     } else if (parsed.type === 'respawn') {
       this.handleRespawn(session);
     } else if (parsed.type === 'ping') {
@@ -309,8 +382,8 @@ export class GameRoom extends DurableObject {
         const splitMass = Math.floor(cell.mass / 2);
         cell.mass = splitMass;
         const r = Math.sqrt(splitMass * 100);
-        // Recombination delay timer: scaling with mass, e.g. 15–35s
-        const recombineTimer = Math.min(35, Math.max(15, 15 + splitMass * 0.025));
+        // Sigmally-style fast competitive recombine cooldown: base 18s, max 45s
+        const recombineTimer = Math.min(45, Math.max(18, 18 + splitMass * 0.015));
         cell.recombineTimer = recombineTimer;
 
         const dx = session.targetX - cell.x;
@@ -342,6 +415,77 @@ export class GameRoom extends DurableObject {
     }
   }
 
+  private handleEject(session: PlayerSession): void {
+    if (session.isDead || session.cells.length === 0) return;
+
+    const now = Date.now();
+    if (now - session.lastEjectTime < EJECT_RATE_LIMIT_MS) return;
+    session.lastEjectTime = now;
+
+    for (const cell of session.cells) {
+      if (cell.mass >= EJECT_MIN_CELL_MASS) {
+        cell.mass -= EJECT_MASS_COST;
+
+        const dx = session.targetX - cell.x;
+        const dy = session.targetY - cell.y;
+        const dist = Math.hypot(dx, dy) || 1;
+        const dirX = dx / dist;
+        const dirY = dy / dist;
+
+        const r = Math.sqrt(cell.mass * 100);
+        const spawnX = cell.x + dirX * (r + 14);
+        const spawnY = cell.y + dirY * (r + 14);
+
+        const pelletId = 'ep_' + Math.random().toString(36).substring(2, 9);
+        const pellet: ServerEjectedPellet = {
+          id: pelletId,
+          ownerId: session.id,
+          x: Math.max(10, Math.min(MAP_SIZE - 10, spawnX)),
+          y: Math.max(10, Math.min(MAP_SIZE - 10, spawnY)),
+          vx: dirX * EJECT_IMPULSE,
+          vy: dirY * EJECT_IMPULSE,
+          mass: EJECT_PELLET_MASS,
+          color: session.color,
+          createdAt: now
+        };
+
+        this.ejectedPellets.set(pelletId, pellet);
+      }
+    }
+  }
+
+  private popCellOnVirus(session: PlayerSession, cell: ServerCell): void {
+    const availableSlots = MAX_CELLS_PER_PLAYER - session.cells.length;
+    if (availableSlots <= 0) return;
+
+    const piecesToCreate = Math.min(availableSlots, Math.max(2, Math.floor(cell.mass / 28)));
+    const pieceMass = Math.max(16, Math.floor(cell.mass / (piecesToCreate + 1)));
+
+    cell.mass = pieceMass;
+    const recombineTimer = Math.min(45, Math.max(18, 18 + pieceMass * 0.015));
+    cell.recombineTimer = recombineTimer;
+
+    const angleStep = (Math.PI * 2) / piecesToCreate;
+    for (let i = 0; i < piecesToCreate; i++) {
+      const a = i * angleStep + Math.random() * 0.2;
+      const popSpeed = 460 + Math.random() * 120;
+
+      const child: ServerCell = {
+        id: 'c_' + Math.random().toString(36).substring(2, 8),
+        x: cell.x + Math.cos(a) * 35,
+        y: cell.y + Math.sin(a) * 35,
+        mass: pieceMass,
+        vx: cell.vx,
+        vy: cell.vy,
+        boostVx: Math.cos(a) * popSpeed,
+        boostVy: Math.sin(a) * popSpeed,
+        recombineTimer
+      };
+
+      session.cells.push(child);
+    }
+  }
+
   private ensureTickLoop(): void {
     if (!this.tickInterval) {
       this.tickInterval = setInterval(() => {
@@ -360,6 +504,7 @@ export class GameRoom extends DurableObject {
     }
 
     const dt = TICK_INTERVAL_MS / 1000; // 0.05 seconds per tick
+    const now = Date.now();
 
     // 1. Move cells, decay boost impulse velocities, count down recombine timers
     for (const session of this.players.values()) {
@@ -409,7 +554,92 @@ export class GameRoom extends DurableObject {
       }
     }
 
-    // 2. Sibling cell interaction (gentle elastic separation & recombining)
+    // 2. Move viruses propelled from feeding splits
+    for (const v of this.viruses.values()) {
+      if (v.vx && v.vy && (Math.abs(v.vx) > 5 || Math.abs(v.vy) > 5)) {
+        v.x += v.vx * dt;
+        v.y += v.vy * dt;
+        const decay = Math.exp(-4.5 * dt);
+        v.vx *= decay;
+        v.vy *= decay;
+        v.x = Math.max(100, Math.min(MAP_SIZE - 100, v.x));
+        v.y = Math.max(100, Math.min(MAP_SIZE - 100, v.y));
+      } else {
+        v.vx = 0;
+        v.vy = 0;
+      }
+    }
+
+    // 3. Move ejected pellets and decay velocity over ~0.4s
+    for (const pellet of this.ejectedPellets.values()) {
+      pellet.x += pellet.vx * dt;
+      pellet.y += pellet.vy * dt;
+      const decay = Math.exp(-7.5 * dt);
+      pellet.vx *= decay;
+      pellet.vy *= decay;
+      pellet.x = Math.max(10, Math.min(MAP_SIZE - 10, pellet.x));
+      pellet.y = Math.max(10, Math.min(MAP_SIZE - 10, pellet.y));
+    }
+
+    // 4. Ejected pellet feeding viruses and player consumption
+    for (const [pelletId, pellet] of this.ejectedPellets.entries()) {
+      let pelletConsumed = false;
+
+      // Virus feeding check
+      for (const v of this.viruses.values()) {
+        const vr = Math.sqrt(v.mass * 100);
+        const dist = Math.hypot(pellet.x - v.x, pellet.y - v.y);
+        if (dist < vr + 12) {
+          v.mass += pellet.mass;
+          this.ejectedPellets.delete(pelletId);
+          pelletConsumed = true;
+
+          // Once fed ~7 pellets (exceeding ~200 mass), split & fire clone forward along line of fire
+          if (v.mass >= VIRUS_SPLIT_THRESHOLD) {
+            v.mass = BASE_VIRUS_MASS;
+            const pSpeed = Math.hypot(pellet.vx, pellet.vy);
+            const fwdX = pSpeed > 10 ? pellet.vx / pSpeed : 1;
+            const fwdY = pSpeed > 10 ? pellet.vy / pSpeed : 0;
+
+            if (this.viruses.size < 40) {
+              const cloneId = 'v_' + Math.random().toString(36).substring(2, 8);
+              this.viruses.set(cloneId, {
+                id: cloneId,
+                x: Math.max(120, Math.min(MAP_SIZE - 120, v.x + fwdX * 140)),
+                y: Math.max(120, Math.min(MAP_SIZE - 120, v.y + fwdY * 140)),
+                mass: BASE_VIRUS_MASS,
+                vx: fwdX * 720,
+                vy: fwdY * 720
+              });
+            }
+          }
+          break;
+        }
+      }
+
+      if (pelletConsumed) continue;
+
+      // Player re-consumption after 0.5s spawn invulnerability
+      const ageSec = (now - pellet.createdAt) / 1000;
+      if (ageSec >= 0.5) {
+        for (const session of this.players.values()) {
+          if (session.isDead || session.cells.length === 0) continue;
+          for (const cell of session.cells) {
+            const cr = Math.sqrt(cell.mass * 100);
+            const dist = Math.hypot(cell.x - pellet.x, cell.y - pellet.y);
+            if (dist < cr) {
+              cell.mass += pellet.mass;
+              this.ejectedPellets.delete(pelletId);
+              pelletConsumed = true;
+              break;
+            }
+          }
+          if (pelletConsumed) break;
+        }
+      }
+    }
+
+    // 5. Sibling cell interaction (gentle elastic separation & recombining)
     for (const session of this.players.values()) {
       if (session.isDead || session.cells.length < 2) continue;
       const cells = session.cells;
@@ -459,7 +689,7 @@ export class GameRoom extends DurableObject {
       }
     }
 
-    // 3. Food pellet consumption
+    // 6. Food pellet consumption
     const eatenFoodIds: number[] = [];
     const newFoods: FoodPellet[] = [];
 
@@ -495,7 +725,42 @@ export class GameRoom extends DurableObject {
       }
     }
 
-    // 4. Server-Authoritative Player-vs-Player (PvP) Consumption
+    // 7. Player-Virus Collisions (Server-Authoritative)
+    for (const session of this.players.values()) {
+      if (session.isDead || session.cells.length === 0) continue;
+
+      for (let ci = session.cells.length - 1; ci >= 0; ci--) {
+        const cell = session.cells[ci];
+        if (!cell) continue;
+        const cr = Math.sqrt(cell.mass * 100);
+
+        for (const v of this.viruses.values()) {
+          // If cell is small (mass < virus.mass): haven/shield, small cells pass safely under
+          if (cell.mass < v.mass) {
+            continue;
+          }
+
+          // If cell is big (mass > virus.mass * 1.15): consumes virus, pops into multiple cells
+          if (cell.mass > v.mass * 1.15) {
+            const dist = Math.hypot(cell.x - v.x, cell.y - v.y);
+            if (dist < cr) {
+              cell.mass += v.mass;
+              this.popCellOnVirus(session, cell);
+
+              // Respawn consumed virus at new random coordinate
+              v.x = Math.round(Math.random() * (MAP_SIZE - 600) + 300);
+              v.y = Math.round(Math.random() * (MAP_SIZE - 600) + 300);
+              v.mass = BASE_VIRUS_MASS;
+              v.vx = 0;
+              v.vy = 0;
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    // 8. Server-Authoritative Player-vs-Player (PvP) Consumption
     const activeSessions = Array.from(this.players.values()).filter(
       (p) => !p.isDead && p.cells.length > 0
     );
@@ -570,7 +835,9 @@ export class GameRoom extends DurableObject {
 
     const payloadObj: any = {
       type: 'state',
-      players: this.serializePlayers()
+      players: this.serializePlayers(),
+      viruses: this.serializeViruses(),
+      ejected: this.serializeEjected()
     };
 
     if (eatenFoodIds.length > 0) {

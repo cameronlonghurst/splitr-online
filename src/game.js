@@ -445,10 +445,14 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       this.isOnlineMode = false;
       this.onlineMapSize = 4000;
       this.onlineFoods = new Map();
+      this.onlineViruses = new Map();
+      this.onlineEjectedPellets = new Map();
       this.onlineLocalCells = new Map();
       this.onlineRemotePlayers = new Map();
       this.onlineLocalPlayerInitialized = false;
       this.isOnlineDead = false;
+      this.isHoldingW = false;
+      this.lastOnlineEjectTime = 0;
 
       this.initTheme();
       this.initCanvasSize();
@@ -658,8 +662,14 @@ import { OnlineRoomClient } from './onlineAdapter.js';
         } else if (e.key === 'w' || e.key === 'W') {
           if (this.isAlive) {
             e.preventDefault();
+            this.isHoldingW = true;
             const now = performance.now();
-            if (now - this.lastEjectTime > EJECT_COOLDOWN_MS) {
+            if (this.isOnlineMode) {
+              if (now - this.lastOnlineEjectTime > 110) {
+                this.lastOnlineEjectTime = now;
+                this.handleEject();
+              }
+            } else if (now - this.lastEjectTime > EJECT_COOLDOWN_MS) {
               this.lastEjectTime = now;
               this.handleEject();
             }
@@ -671,6 +681,16 @@ import { OnlineRoomClient } from './onlineAdapter.js';
           e.preventDefault();
           this.toggleLeaderboard();
         }
+      });
+
+      // Release continuous keys on keyup and window blur
+      window.addEventListener('keyup', (e) => {
+        if (e.key === 'w' || e.key === 'W') {
+          this.isHoldingW = false;
+        }
+      });
+      window.addEventListener('blur', () => {
+        this.isHoldingW = false;
       });
 
       // Mass text display toggle
@@ -1123,8 +1143,13 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       // Online Entities: local predicted player cells & remote interpolated player cells
       this.onlineLocalCells = new Map();
       this.onlineRemotePlayers = new Map();
+      this.onlineFoods = new Map();
+      this.onlineViruses = new Map();
+      this.onlineEjectedPellets = new Map();
       this.onlineLocalPlayerInitialized = false;
       this.isOnlineDead = false;
+      this.isHoldingW = false;
+      this.lastOnlineEjectTime = 0;
 
       this.hideOnlineErrorModal();
       if (this.lobbyScreen) this.lobbyScreen.classList.add('hidden');
@@ -1154,6 +1179,36 @@ import { OnlineRoomClient } from './onlineAdapter.js';
           if (data && Array.isArray(data.foods)) {
             for (const f of data.foods) {
               this.onlineFoods.set(f.id, f);
+            }
+          }
+          this.onlineViruses.clear();
+          if (data && Array.isArray(data.viruses)) {
+            for (const v of data.viruses) {
+              const vr = Math.sqrt((v.mass || 100) * 100);
+              this.onlineViruses.set(v.id, {
+                id: v.id,
+                x: v.x,
+                y: v.y,
+                targetX: v.x,
+                targetY: v.y,
+                mass: v.mass || 100,
+                radius: vr,
+                targetRadius: vr
+              });
+            }
+          }
+          this.onlineEjectedPellets.clear();
+          if (data && Array.isArray(data.ejected)) {
+            for (const ep of data.ejected) {
+              this.onlineEjectedPellets.set(ep.id, {
+                id: ep.id,
+                x: ep.x,
+                y: ep.y,
+                targetX: ep.x,
+                targetY: ep.y,
+                color: ep.color || '#111111',
+                mass: ep.mass || 15
+              });
             }
           }
           if (data && data.spawn) {
@@ -1191,6 +1246,70 @@ import { OnlineRoomClient } from './onlineAdapter.js';
           if (Array.isArray(stateData.newFoods)) {
             for (const f of stateData.newFoods) {
               this.onlineFoods.set(f.id, f);
+            }
+          }
+
+          // Sync online viruses
+          if (Array.isArray(stateData.viruses)) {
+            const activeVirusIds = new Set();
+            for (const sv of stateData.viruses) {
+              activeVirusIds.add(sv.id);
+              const targetR = Math.sqrt((sv.mass || 100) * 100);
+              let ov = this.onlineViruses.get(sv.id);
+              if (!ov) {
+                ov = {
+                  id: sv.id,
+                  x: sv.x,
+                  y: sv.y,
+                  targetX: sv.x,
+                  targetY: sv.y,
+                  mass: sv.mass || 100,
+                  radius: targetR,
+                  targetRadius: targetR
+                };
+                this.onlineViruses.set(sv.id, ov);
+              } else {
+                ov.targetX = sv.x;
+                ov.targetY = sv.y;
+                ov.mass = sv.mass || 100;
+                ov.targetRadius = targetR;
+              }
+            }
+            for (const id of this.onlineViruses.keys()) {
+              if (!activeVirusIds.has(id)) {
+                this.onlineViruses.delete(id);
+              }
+            }
+          }
+
+          // Sync online ejected pellets
+          if (Array.isArray(stateData.ejected)) {
+            const activeEjectedIds = new Set();
+            for (const sep of stateData.ejected) {
+              activeEjectedIds.add(sep.id);
+              let oep = this.onlineEjectedPellets.get(sep.id);
+              if (!oep) {
+                oep = {
+                  id: sep.id,
+                  x: sep.x,
+                  y: sep.y,
+                  targetX: sep.x,
+                  targetY: sep.y,
+                  color: sep.color || '#111111',
+                  mass: sep.mass || 15
+                };
+                this.onlineEjectedPellets.set(sep.id, oep);
+              } else {
+                oep.targetX = sep.x;
+                oep.targetY = sep.y;
+                oep.color = sep.color || oep.color;
+                oep.mass = sep.mass || oep.mass;
+              }
+            }
+            for (const id of this.onlineEjectedPellets.keys()) {
+              if (!activeEjectedIds.has(id)) {
+                this.onlineEjectedPellets.delete(id);
+              }
             }
           }
 
@@ -1988,7 +2107,12 @@ import { OnlineRoomClient } from './onlineAdapter.js';
     }
 
     handleEject() {
-      if (this.isHost) {
+      if (this.isOnlineMode) {
+        if (this.onlineClient && this.onlineClient.isConnected && this.isAlive) {
+          this.playEjectSound();
+          this.onlineClient.sendEject();
+        }
+      } else if (this.isHost) {
         this.performEjectForPlayer(this.localPlayerId);
       } else if (this.hostConn && this.hostConn.open) {
         this.playEjectSound();
@@ -2566,6 +2690,29 @@ import { OnlineRoomClient } from './onlineAdapter.js';
             rc.radius = (rc.radius || targetR) + (targetR - (rc.radius || targetR)) * Math.min(1, dt * 5.0);
           }
         }
+
+        // 3. Linear Interpolation for Online Viruses
+        for (const ov of this.onlineViruses.values()) {
+          ov.x += (ov.targetX - ov.x) * 0.25;
+          ov.y += (ov.targetY - ov.y) * 0.25;
+          const targetR = ov.targetRadius || 100;
+          ov.radius = (ov.radius || targetR) + (targetR - (ov.radius || targetR)) * Math.min(1, dt * 5.0);
+        }
+
+        // 4. Linear Interpolation for Online Ejected Pellets
+        for (const oep of this.onlineEjectedPellets.values()) {
+          oep.x += (oep.targetX - oep.x) * 0.35;
+          oep.y += (oep.targetY - oep.y) * 0.35;
+        }
+
+        // 5. Continuous Ejection while holding W (rate-limited ~9 shots/s)
+        if (this.isAlive && this.isHoldingW) {
+          const now = performance.now();
+          if (now - this.lastOnlineEjectTime > 110) {
+            this.lastOnlineEjectTime = now;
+            this.handleEject();
+          }
+        }
       } else if (this.isHost) {
         this.updateBotAI(dt);
         this.updatePhysics(dt);
@@ -2711,6 +2858,8 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       this.drawBoundaries(ctx);
       if (this.isOnlineMode) {
         this.drawOnlineFoods(ctx);
+        this.drawOnlineEjectedMasses(ctx);
+        this.drawOnlineViruses(ctx);
         this.drawOnlinePlayers(ctx);
       } else {
         this.drawFoods(ctx);
@@ -2745,6 +2894,73 @@ import { OnlineRoomClient } from './onlineAdapter.js';
         ctx.strokeStyle = this.isDarkMode ? 'rgba(255, 255, 255, 0.85)' : '#111111';
         ctx.lineWidth = food.isSuper ? 2 : 1;
         ctx.stroke();
+      }
+    }
+
+    drawOnlineEjectedMasses(ctx) {
+      const halfW = (this.canvas.width / 2) / this.camZoom + 40;
+      const halfH = (this.canvas.height / 2) / this.camZoom + 40;
+
+      for (const em of this.onlineEjectedPellets.values()) {
+        if (
+          em.x < this.camX - halfW ||
+          em.x > this.camX + halfW ||
+          em.y < this.camY - halfH ||
+          em.y > this.camY + halfH
+        ) {
+          continue;
+        }
+
+        ctx.beginPath();
+        // Ejected mass: distinct from ambient food (13px radius vs 9.5px, shooter's color)
+        ctx.arc(em.x, em.y, 13, 0, Math.PI * 2);
+        ctx.fillStyle = em.color || '#111111';
+        ctx.fill();
+        ctx.strokeStyle = this.isDarkMode ? '#FFFFFF' : '#111111';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      }
+    }
+
+    drawOnlineViruses(ctx) {
+      const halfW = (this.canvas.width / 2) / this.camZoom + 120;
+      const halfH = (this.canvas.height / 2) / this.camZoom + 120;
+
+      for (const v of this.onlineViruses.values()) {
+        if (
+          v.x < this.camX - halfW ||
+          v.x > this.camX + halfW ||
+          v.y < this.camY - halfH ||
+          v.y > this.camY + halfH
+        ) {
+          continue;
+        }
+
+        ctx.save();
+        ctx.translate(v.x, v.y);
+
+        const spikes = 16;
+        const outerR = v.radius || 100;
+        const innerR = outerR * 0.85;
+
+        ctx.beginPath();
+        for (let i = 0; i < spikes * 2; i++) {
+          const r = i % 2 === 0 ? outerR : innerR;
+          const a = (i * Math.PI) / spikes;
+          const x = Math.cos(a) * r;
+          const y = Math.sin(a) * r;
+          if (i === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+
+        ctx.fillStyle = this.isDarkMode ? '#151622' : '#FFFFFF';
+        ctx.fill();
+        ctx.strokeStyle = this.isDarkMode ? '#10B981' : '#111111';
+        ctx.lineWidth = 3.5;
+        ctx.stroke();
+
+        ctx.restore();
       }
     }
 
@@ -3108,6 +3324,16 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       mCtx.strokeRect(camMinX, camMinY, camBoxW, camBoxH);
 
       if (this.isOnlineMode) {
+        // Draw online viruses on minimap
+        mCtx.fillStyle = '#10B981';
+        for (const v of this.onlineViruses.values()) {
+          const mx = v.x * scale;
+          const my = v.y * scale;
+          mCtx.beginPath();
+          mCtx.arc(mx, my, 2.5, 0, Math.PI * 2);
+          mCtx.fill();
+        }
+
         for (const p of this.onlineRemotePlayers.values()) {
           mCtx.fillStyle = p.color || '#64748B';
           if (p.cells) {

@@ -145,6 +145,11 @@ export class OnlineRoomClient {
     this.sendRaw({ type: 'split' });
   }
 
+  sendEject() {
+    if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.sendRaw({ type: 'eject' });
+  }
+
   sendRespawn() {
     if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
     this.sendRaw({ type: 'respawn' });
