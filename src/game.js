@@ -445,9 +445,10 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       this.isOnlineMode = false;
       this.onlineMapSize = 4000;
       this.onlineFoods = new Map();
-      this.onlineLocalPlayer = { x: 2000, y: 2000, mass: 25, radius: 50, targetRadius: 50 };
+      this.onlineLocalCells = new Map();
       this.onlineRemotePlayers = new Map();
       this.onlineLocalPlayerInitialized = false;
+      this.isOnlineDead = false;
 
       this.initTheme();
       this.initCanvasSize();
@@ -1119,16 +1120,11 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       this.isHost = false;
       this.isSpectating = false;
 
-      // Online Entities: local predicted player & remote interpolated players
-      this.onlineLocalPlayer = {
-        x: this.onlineMapSize / 2,
-        y: this.onlineMapSize / 2,
-        mass: 25,
-        radius: 50,
-        targetRadius: 50
-      };
+      // Online Entities: local predicted player cells & remote interpolated player cells
+      this.onlineLocalCells = new Map();
       this.onlineRemotePlayers = new Map();
       this.onlineLocalPlayerInitialized = false;
+      this.isOnlineDead = false;
 
       this.hideOnlineErrorModal();
       if (this.lobbyScreen) this.lobbyScreen.classList.add('hidden');
@@ -1140,8 +1136,8 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       this.viruses = [];
       this.ejectedMasses = [];
 
-      this.camX = this.onlineLocalPlayer.x;
-      this.camY = this.onlineLocalPlayer.y;
+      this.camX = this.onlineMapSize / 2;
+      this.camY = this.onlineMapSize / 2;
       this.camZoom = 0.65;
 
       if (this.statPing) this.statPing.textContent = 'CONNECTING...';
@@ -1160,40 +1156,31 @@ import { OnlineRoomClient } from './onlineAdapter.js';
               this.onlineFoods.set(f.id, f);
             }
           }
-          if (data && Array.isArray(data.players)) {
-            const me = data.players.find((p) => p.id === data.playerId);
-            if (me && me.mass) {
-              this.onlineLocalPlayer.mass = me.mass;
-              this.onlineLocalPlayer.radius = Math.sqrt(me.mass * 100);
-              this.onlineLocalPlayer.targetRadius = Math.sqrt(me.mass * 100);
-            }
-          }
           if (data && data.spawn) {
-            this.onlineLocalPlayer.x = data.spawn.x;
-            this.onlineLocalPlayer.y = data.spawn.y;
             this.camX = data.spawn.x;
             this.camY = data.spawn.y;
-            this.onlineLocalPlayerInitialized = true;
+          }
+          if (data && Array.isArray(data.players)) {
+            this.syncOnlinePlayers(data.players, data.playerId);
           }
         },
         onConnected: (data) => {
           if (this.statPing) this.statPing.textContent = 'ONLINE';
           if (this.statPingDot) this.statPingDot.className = 'inline-block w-2 h-2 rounded-full bg-emerald-500';
           this.isAlive = true;
+          this.isOnlineDead = false;
           this.startTime = Date.now();
+          this.peakMass = BASE_PLAYER_MASS;
+          this.foodEaten = 0;
+          this.virusesHit = 0;
 
           if (data && data.spawn) {
-            this.onlineLocalPlayer.x = data.spawn.x;
-            this.onlineLocalPlayer.y = data.spawn.y;
             this.camX = data.spawn.x;
             this.camY = data.spawn.y;
-            this.onlineLocalPlayerInitialized = true;
           }
         },
         onState: (stateData, localId) => {
           if (localId) this.localPlayerId = localId;
-
-          const serverPlayers = Array.isArray(stateData.players) ? stateData.players : [];
 
           // Process eaten and newly spawned food pellets
           if (Array.isArray(stateData.eaten)) {
@@ -1207,79 +1194,22 @@ import { OnlineRoomClient } from './onlineAdapter.js';
             }
           }
 
-          const currentIds = new Set();
-          for (const sp of serverPlayers) {
-            // Check if this entity is the local player
-            if (sp.id === this.localPlayerId) {
-              if (sp.mass) {
-                this.onlineLocalPlayer.mass = sp.mass;
-                this.onlineLocalPlayer.targetRadius = Math.sqrt(sp.mass * 100);
-              }
-              if (!this.onlineLocalPlayerInitialized) {
-                this.onlineLocalPlayer.x = sp.x;
-                this.onlineLocalPlayer.y = sp.y;
-                this.camX = sp.x;
-                this.camY = sp.y;
-                this.onlineLocalPlayerInitialized = true;
-              }
-              continue;
-            }
-
-            // Remote players: store as targetX, targetY and targetRadius for smooth interpolation
-            currentIds.add(sp.id);
-            let rp = this.onlineRemotePlayers.get(sp.id);
-            if (!rp) {
-              const startMass = sp.mass || 25;
-              const r = Math.sqrt(startMass * 100);
-              rp = {
-                id: sp.id,
-                name: sp.name,
-                color: sp.color,
-                x: sp.x,
-                y: sp.y,
-                targetX: sp.x,
-                targetY: sp.y,
-                mass: startMass,
-                radius: r,
-                targetRadius: r
-              };
-              this.onlineRemotePlayers.set(sp.id, rp);
-            } else {
-              rp.targetX = sp.x;
-              rp.targetY = sp.y;
-              rp.name = sp.name;
-              rp.color = sp.color;
-              if (sp.mass) {
-                rp.mass = sp.mass;
-                rp.targetRadius = Math.sqrt(sp.mass * 100);
-              }
-            }
+          if (Array.isArray(stateData.players)) {
+            this.syncOnlinePlayers(stateData.players, this.localPlayerId);
           }
-
-          // Remove any disconnected players
-          for (const id of this.onlineRemotePlayers.keys()) {
-            if (!currentIds.has(id)) {
-              this.onlineRemotePlayers.delete(id);
-            }
+        },
+        onGameOver: () => {
+          if (this.isAlive) {
+            this.onLocalPlayerDeath();
           }
-
-          if (this.hudMass) {
-            this.hudMass.textContent = Math.round(this.onlineLocalPlayer.mass || 25);
-          }
-
-          if (this.playerTotalCount) {
-            this.playerTotalCount.textContent = `(${players.length})`;
-          }
-          if (this.leaderboardList) {
-            this.leaderboardList.innerHTML = players.map((p, idx) => `
-              <div class="flex items-center justify-between text-[11px] font-mono">
-                <div class="flex items-center gap-1.5 truncate">
-                  <span class="w-2 h-2 rounded-full" style="background:${escapeHtml(p.color)}"></span>
-                  <span class="font-bold truncate">${escapeHtml(p.name)}</span>
-                </div>
-                <span class="text-zinc-400">#${idx + 1}</span>
-              </div>
-            `).join('');
+        },
+        onRespawned: (data) => {
+          this.isAlive = true;
+          this.isOnlineDead = false;
+          this.startTime = Date.now();
+          if (data && data.spawn) {
+            this.camX = data.spawn.x;
+            this.camY = data.spawn.y;
           }
         },
         onError: (err) => {
@@ -1289,13 +1219,141 @@ import { OnlineRoomClient } from './onlineAdapter.js';
           );
         },
         onDisconnect: () => {
-          this.showOnlineErrorModal('Online Connection Lost', 'Disconnected from the public room server.');
+          if (this.isOnlineMode && this.isAlive) {
+            this.showOnlineErrorModal('Online Connection Lost', 'Disconnected from the public room server.');
+          }
         }
       });
 
       if (!this.loopStarted) {
         this.loopStarted = true;
         requestAnimationFrame((t) => this.gameLoop(t));
+      }
+    }
+
+    syncOnlinePlayers(serverPlayers, localId) {
+      const activeRemoteIds = new Set();
+      let foundLocalPlayer = false;
+
+      for (const sp of serverPlayers) {
+        if (sp.id === localId) {
+          foundLocalPlayer = true;
+          const activeLocalCellIds = new Set();
+          const cells = Array.isArray(sp.cells) ? sp.cells : [];
+
+          for (const sc of cells) {
+            activeLocalCellIds.add(sc.id);
+            const targetR = Math.sqrt(sc.mass * 100);
+            let lc = this.onlineLocalCells.get(sc.id);
+
+            if (!lc) {
+              lc = {
+                id: sc.id,
+                x: sc.x,
+                y: sc.y,
+                targetX: sc.x,
+                targetY: sc.y,
+                mass: sc.mass,
+                radius: targetR,
+                targetRadius: targetR,
+                vx: sc.vx || 0,
+                vy: sc.vy || 0
+              };
+              this.onlineLocalCells.set(sc.id, lc);
+            } else {
+              lc.targetX = sc.x;
+              lc.targetY = sc.y;
+              lc.mass = sc.mass;
+              lc.targetRadius = targetR;
+              lc.vx = sc.vx || 0;
+              lc.vy = sc.vy || 0;
+            }
+          }
+
+          // Remove any cells no longer in server state
+          for (const id of this.onlineLocalCells.keys()) {
+            if (!activeLocalCellIds.has(id)) {
+              this.onlineLocalCells.delete(id);
+            }
+          }
+
+          const totalMass = sp.totalMass || cells.reduce((sum, c) => sum + c.mass, 0);
+          if (totalMass > this.peakMass) {
+            this.peakMass = totalMass;
+          }
+
+          if (this.onlineLocalCells.size === 0 && this.isAlive) {
+            this.onLocalPlayerDeath();
+          }
+          continue;
+        }
+
+        // Remote players
+        activeRemoteIds.add(sp.id);
+        let rp = this.onlineRemotePlayers.get(sp.id);
+        if (!rp) {
+          rp = {
+            id: sp.id,
+            name: sp.name || 'Player',
+            color: sp.color || '#64748B',
+            totalMass: sp.totalMass || 25,
+            cells: new Map()
+          };
+          this.onlineRemotePlayers.set(sp.id, rp);
+        } else {
+          rp.name = sp.name || 'Player';
+          rp.color = sp.color || '#64748B';
+          rp.totalMass = sp.totalMass || 25;
+        }
+
+        const activeRemoteCellIds = new Set();
+        const cells = Array.isArray(sp.cells) ? sp.cells : [];
+
+        for (const sc of cells) {
+          activeRemoteCellIds.add(sc.id);
+          const targetR = Math.sqrt(sc.mass * 100);
+          let rc = rp.cells.get(sc.id);
+
+          if (!rc) {
+            rc = {
+              id: sc.id,
+              x: sc.x,
+              y: sc.y,
+              targetX: sc.x,
+              targetY: sc.y,
+              mass: sc.mass,
+              radius: targetR,
+              targetRadius: targetR,
+              vx: sc.vx || 0,
+              vy: sc.vy || 0
+            };
+            rp.cells.set(sc.id, rc);
+          } else {
+            rc.targetX = sc.x;
+            rc.targetY = sc.y;
+            rc.mass = sc.mass;
+            rc.targetRadius = targetR;
+            rc.vx = sc.vx || 0;
+            rc.vy = sc.vy || 0;
+          }
+        }
+
+        for (const id of rp.cells.keys()) {
+          if (!activeRemoteCellIds.has(id)) {
+            rp.cells.delete(id);
+          }
+        }
+      }
+
+      // Cleanup disconnected remote players
+      for (const id of this.onlineRemotePlayers.keys()) {
+        if (!activeRemoteIds.has(id)) {
+          this.onlineRemotePlayers.delete(id);
+        }
+      }
+
+      if (!foundLocalPlayer && this.isAlive && this.onlineLocalCells.size > 0) {
+        this.onLocalPlayerDeath();
       }
     }
 
@@ -1912,7 +1970,12 @@ import { OnlineRoomClient } from './onlineAdapter.js';
 
     // --- GAME ACTIONS: SPLIT & EJECT ---
     handleSplit() {
-      if (this.isHost) {
+      if (this.isOnlineMode) {
+        this.playSplitSound();
+        if (this.onlineClient && this.onlineClient.isConnected) {
+          this.onlineClient.sendSplit();
+        }
+      } else if (this.isHost) {
         this.performSplitForPlayer(this.localPlayerId);
       } else if (this.hostConn && this.hostConn.open) {
         this.playSplitSound();
@@ -2481,48 +2544,27 @@ import { OnlineRoomClient } from './onlineAdapter.js';
 
       // Update AI & Physics
       if (this.isOnlineMode) {
-        // 1. Client-Side Prediction for Local Player:
-        // Move local player immediately based on mouse movement/controls inside the local animation frame
-        if (this.onlineLocalPlayer) {
-          const dx = this.mouseWorldX - this.onlineLocalPlayer.x;
-          const dy = this.mouseWorldY - this.onlineLocalPlayer.y;
-          const dist = Math.hypot(dx, dy);
-
-          const currentMass = this.onlineLocalPlayer.mass || 25;
-          const speed = Math.max(90, 960 / Math.pow(currentMass, 0.38));
-
-          if (dist > 8) {
-            const moveStep = Math.min(dist, speed * dt);
-            this.onlineLocalPlayer.x += (dx / dist) * moveStep;
-            this.onlineLocalPlayer.y += (dy / dist) * moveStep;
-
-            // Clamping to map boundaries taking radius into account
-            const mapW = this.onlineMapSize || 4000;
-            const r = this.onlineLocalPlayer.radius || 50;
-            this.onlineLocalPlayer.x = Math.max(r, Math.min(mapW - r, this.onlineLocalPlayer.x));
-            this.onlineLocalPlayer.y = Math.max(r, Math.min(mapW - r, this.onlineLocalPlayer.y));
-          }
-
-          // Smooth radius expansion for local player
-          const targetR = this.onlineLocalPlayer.targetRadius || Math.sqrt(currentMass * 100);
-          const curR = this.onlineLocalPlayer.radius || targetR;
-          this.onlineLocalPlayer.radius = curR + (targetR - curR) * Math.min(1, dt * 5.0);
-
-          // Transmit predicted position to server
-          if (this.onlineClient && this.onlineClient.isConnected) {
-            this.onlineClient.sendInput(this.onlineLocalPlayer.x, this.onlineLocalPlayer.y);
-          }
+        // Send cursor world coordinates to server for steering & directional splitting
+        if (this.onlineClient && this.onlineClient.isConnected) {
+          this.onlineClient.sendInput(this.mouseWorldX, this.mouseWorldY);
         }
 
-        // 2. Linear Interpolation (Lerp) for Remote Players:
-        // Smoothly slide remote players toward their target coordinates each frame and smoothly update radius
-        for (const rp of this.onlineRemotePlayers.values()) {
-          rp.x += (rp.targetX - rp.x) * 0.2;
-          rp.y += (rp.targetY - rp.y) * 0.2;
+        // 1. Smooth Interpolation for Local Player Sub-cells
+        for (const lc of this.onlineLocalCells.values()) {
+          lc.x += (lc.targetX - lc.x) * 0.25;
+          lc.y += (lc.targetY - lc.y) * 0.25;
+          const targetR = lc.targetRadius || Math.sqrt(lc.mass * 100);
+          lc.radius = (lc.radius || targetR) + (targetR - (lc.radius || targetR)) * Math.min(1, dt * 5.0);
+        }
 
-          const targetR = rp.targetRadius || Math.sqrt((rp.mass || 25) * 100);
-          const curR = rp.radius || targetR;
-          rp.radius = curR + (targetR - curR) * Math.min(1, dt * 5.0);
+        // 2. Linear Interpolation (Lerp) for Remote Players Sub-cells
+        for (const rp of this.onlineRemotePlayers.values()) {
+          for (const rc of rp.cells.values()) {
+            rc.x += (rc.targetX - rc.x) * 0.25;
+            rc.y += (rc.targetY - rc.y) * 0.25;
+            const targetR = rc.targetRadius || Math.sqrt(rc.mass * 100);
+            rc.radius = (rc.radius || targetR) + (targetR - (rc.radius || targetR)) * Math.min(1, dt * 5.0);
+          }
         }
       } else if (this.isHost) {
         this.updateBotAI(dt);
@@ -2549,24 +2591,47 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       let currY = this.camY;
 
       if (this.isOnlineMode) {
-        if (this.onlineLocalPlayer) {
-          currX = this.onlineLocalPlayer.x;
-          currY = this.onlineLocalPlayer.y;
-          this.camX += (currX - this.camX) * Math.min(1, dt * 10);
-          this.camY += (currY - this.camY) * Math.min(1, dt * 10);
+        const localCells = Array.from(this.onlineLocalCells.values());
+        if (localCells.length > 0) {
+          let totalX = 0, totalY = 0, totalMass = 0;
+          let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
-          // Dynamic zoom scaling with player radius
-          const targetZoom = Math.max(0.3, Math.min(0.9, 50 / (this.onlineLocalPlayer.radius || 50)));
-          this.camZoom += (targetZoom - this.camZoom) * Math.min(1, dt * 2.5);
+          for (const c of localCells) {
+            const m = c.mass || 25;
+            totalX += c.x * m;
+            totalY += c.y * m;
+            totalMass += m;
+            const r = c.radius || Math.sqrt(m * 100);
+            minX = Math.min(minX, c.x - r);
+            maxX = Math.max(maxX, c.x + r);
+            minY = Math.min(minY, c.y - r);
+            maxY = Math.max(maxY, c.y + r);
+          }
+
+          const comX = totalMass > 0 ? totalX / totalMass : (this.onlineMapSize / 2);
+          const comY = totalMass > 0 ? totalY / totalMass : (this.onlineMapSize / 2);
+
+          // Focus camera on center-of-mass
+          currX = comX;
+          currY = comY;
+          this.camX += (comX - this.camX) * Math.min(1, dt * 8);
+          this.camY += (comY - this.camY) * Math.min(1, dt * 8);
+
+          // Calculate camera zoom based on bounding box enclosing all sub-cells
+          const spanW = Math.max(160, maxX - minX);
+          const spanH = Math.max(160, maxY - minY);
+          const maxSpan = Math.max(spanW, spanH);
+          const targetZoom = Math.max(0.18, Math.min(0.85, 360 / maxSpan));
+          this.camZoom += (targetZoom - this.camZoom) * Math.min(1, dt * 3.0);
 
           if (this.hudCoords) {
-            this.hudCoords.textContent = `${Math.round(currX)}, ${Math.round(currY)}`;
+            this.hudCoords.textContent = `${Math.round(comX)}, ${Math.round(comY)}`;
           }
           if (this.hudMass) {
-            this.hudMass.textContent = Math.round(this.onlineLocalPlayer.mass || 25);
+            this.hudMass.textContent = Math.round(totalMass);
           }
           if (this.hudCells) {
-            this.hudCells.innerHTML = '1<span class="text-zinc-500 text-xs">/1</span>';
+            this.hudCells.innerHTML = `${localCells.length}<span class="text-zinc-500 text-xs">/16</span>`;
           }
         }
       } else {
@@ -2692,56 +2757,57 @@ import { OnlineRoomClient } from './onlineAdapter.js';
     drawOnlinePlayers(ctx) {
       const isDark = this.isDarkMode;
 
-      // 1. Draw remote players (smoothly interpolated positions and radii)
+      // 1. Draw remote players (smoothly interpolated positions and radii for each sub-cell)
       for (const p of this.onlineRemotePlayers.values()) {
-        const radius = Math.max(20, p.radius || Math.sqrt((p.mass || 25) * 100));
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
+        for (const c of p.cells.values()) {
+          const radius = Math.max(15, c.radius || Math.sqrt((c.mass || 25) * 100));
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
 
-        // Fill body
-        ctx.fillStyle = p.color || (isDark ? '#FFFFFF' : '#111111');
-        ctx.fill();
+          // Fill body
+          ctx.fillStyle = p.color || (isDark ? '#FFFFFF' : '#111111');
+          ctx.fill();
 
-        // Stroke ring
-        ctx.lineWidth = 2.5;
-        ctx.strokeStyle = isDark ? '#374151' : '#D1D5DB';
-        ctx.stroke();
+          // Stroke ring
+          ctx.lineWidth = 2.5;
+          ctx.strokeStyle = isDark ? '#374151' : '#D1D5DB';
+          ctx.stroke();
 
-        // Name text
-        ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.fillStyle = isDark ? '#F3F4F6' : '#111111';
-        ctx.strokeStyle = isDark ? '#000000' : '#FFFFFF';
-        ctx.lineWidth = 3;
-        const name = p.name || 'Player';
-        ctx.strokeText(name, p.x, p.y - radius - 14);
-        ctx.fillText(name, p.x, p.y - radius - 14);
+          // Name text above cell
+          ctx.font = 'bold 13px system-ui, -apple-system, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillStyle = isDark ? '#F3F4F6' : '#111111';
+          ctx.strokeStyle = isDark ? '#000000' : '#FFFFFF';
+          ctx.lineWidth = 3;
+          const name = p.name || 'Player';
+          ctx.strokeText(name, c.x, c.y - radius - 14);
+          ctx.fillText(name, c.x, c.y - radius - 14);
 
-        // Mass text inside player circle if large enough
-        if (radius >= 32) {
-          ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
-          ctx.fillStyle = '#FFFFFF';
-          ctx.fillText(Math.round(p.mass || 25), p.x, p.y);
+          // Mass text inside cell
+          if (radius >= 25) {
+            ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillText(Math.round(c.mass), c.x, c.y);
+          }
+
+          ctx.restore();
         }
-
-        ctx.restore();
       }
 
-      // 2. Draw local player (immediate client-side predicted position and smoothly scaled radius)
-      if (this.onlineLocalPlayer) {
-        const lp = this.onlineLocalPlayer;
-        const radius = Math.max(20, lp.radius || Math.sqrt((lp.mass || 25) * 100));
+      // 2. Draw local player (all active predicted sub-cells)
+      for (const c of this.onlineLocalCells.values()) {
+        const radius = Math.max(15, c.radius || Math.sqrt((c.mass || 25) * 100));
         ctx.save();
         ctx.beginPath();
-        ctx.arc(lp.x, lp.y, radius, 0, Math.PI * 2);
+        ctx.arc(c.x, c.y, radius, 0, Math.PI * 2);
 
         // Fill body
         ctx.fillStyle = this.localColor || (isDark ? '#FFFFFF' : '#111111');
         ctx.fill();
 
-        // Stroke ring
+        // Stroke ring with local accent color
         ctx.lineWidth = 3.5;
         ctx.strokeStyle = isDark ? '#10B981' : '#2563EB';
         ctx.stroke();
@@ -2754,16 +2820,16 @@ import { OnlineRoomClient } from './onlineAdapter.js';
         ctx.strokeStyle = isDark ? '#000000' : '#FFFFFF';
         ctx.lineWidth = 3;
         const name = this.localNickname || 'Player';
-        ctx.strokeText(name, lp.x, lp.y - radius - 14);
-        ctx.fillText(name, lp.x, lp.y - radius - 14);
+        ctx.strokeText(name, c.x, c.y - radius - 14);
+        ctx.fillText(name, c.x, c.y - radius - 14);
 
         // Center indicator (YOU / Mass)
         ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
         ctx.fillStyle = '#FFFFFF';
-        if (radius >= 38) {
-          ctx.fillText(`YOU (${Math.round(lp.mass || 25)})`, lp.x, lp.y);
-        } else {
-          ctx.fillText('YOU', lp.x, lp.y);
+        if (radius >= 35) {
+          ctx.fillText(`YOU (${Math.round(c.mass)})`, c.x, c.y);
+        } else if (radius >= 22) {
+          ctx.fillText(Math.round(c.mass), c.x, c.y);
         }
 
         ctx.restore();
@@ -2942,19 +3008,29 @@ import { OnlineRoomClient } from './onlineAdapter.js';
     updateLeaderboard() {
       const rankings = [];
       if (this.isOnlineMode) {
-        if (this.onlineLocalPlayer) {
+        let localTotalMass = 0;
+        for (const c of this.onlineLocalCells.values()) {
+          localTotalMass += c.mass || 0;
+        }
+        if (this.onlineLocalCells.size > 0 || this.isAlive) {
           rankings.push({
             id: 'local',
             name: this.localNickname || 'Player',
-            mass: this.onlineLocalPlayer.mass || 25,
+            mass: localTotalMass || 25,
             isLocal: true
           });
         }
         for (const p of this.onlineRemotePlayers.values()) {
+          let remoteTotalMass = p.totalMass || 0;
+          if (remoteTotalMass === 0 && p.cells) {
+            for (const c of p.cells.values()) {
+              remoteTotalMass += c.mass || 0;
+            }
+          }
           rankings.push({
             id: p.id,
             name: p.name || 'Player',
-            mass: p.mass || 25,
+            mass: remoteTotalMass || 25,
             isLocal: false
           });
         }
@@ -3023,18 +3099,22 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       if (this.isOnlineMode) {
         for (const p of this.onlineRemotePlayers.values()) {
           mCtx.fillStyle = p.color || '#64748B';
-          const mx = p.x * scale;
-          const my = p.y * scale;
-          const mr = Math.max(2, (p.radius || 35) * scale);
-          mCtx.beginPath();
-          mCtx.arc(mx, my, mr, 0, Math.PI * 2);
-          mCtx.fill();
+          if (p.cells) {
+            for (const c of p.cells.values()) {
+              const mx = c.x * scale;
+              const my = c.y * scale;
+              const mr = Math.max(2, (c.radius || 20) * scale);
+              mCtx.beginPath();
+              mCtx.arc(mx, my, mr, 0, Math.PI * 2);
+              mCtx.fill();
+            }
+          }
         }
-        if (this.onlineLocalPlayer) {
-          mCtx.fillStyle = this.isDarkMode ? '#10B981' : '#2563EB';
-          const mx = this.onlineLocalPlayer.x * scale;
-          const my = this.onlineLocalPlayer.y * scale;
-          const mr = Math.max(3, (this.onlineLocalPlayer.radius || 35) * scale);
+        mCtx.fillStyle = this.isDarkMode ? '#10B981' : '#2563EB';
+        for (const c of this.onlineLocalCells.values()) {
+          const mx = c.x * scale;
+          const my = c.y * scale;
+          const mr = Math.max(2.5, (c.radius || 20) * scale);
           mCtx.beginPath();
           mCtx.arc(mx, my, mr, 0, Math.PI * 2);
           mCtx.fill();

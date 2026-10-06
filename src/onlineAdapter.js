@@ -15,6 +15,8 @@ export class OnlineRoomClient {
     this.onErrorCallback = null;
     this.onDisconnectCallback = null;
     this.onConnectedCallback = null;
+    this.onGameOverCallback = null;
+    this.onRespawnedCallback = null;
   }
 
   static getWebSocketUrl() {
@@ -33,7 +35,7 @@ export class OnlineRoomClient {
     return `${protocol}//${host}/api/room/public`;
   }
 
-  connect({ nickname, color, onConnected, onInit, onState, onError, onDisconnect }) {
+  connect({ nickname, color, onConnected, onInit, onState, onError, onDisconnect, onGameOver, onRespawned }) {
     this.disconnect();
 
     this.onConnectedCallback = onConnected;
@@ -41,6 +43,8 @@ export class OnlineRoomClient {
     this.onStateCallback = onState;
     this.onErrorCallback = onError;
     this.onDisconnectCallback = onDisconnect;
+    this.onGameOverCallback = onGameOver;
+    this.onRespawnedCallback = onRespawned;
 
     const url = OnlineRoomClient.getWebSocketUrl();
 
@@ -94,6 +98,14 @@ export class OnlineRoomClient {
         if (this.onStateCallback) {
           this.onStateCallback(data, this.localPlayerId);
         }
+      } else if (data.type === 'gameOver') {
+        if (this.onGameOverCallback) {
+          this.onGameOverCallback(data);
+        }
+      } else if (data.type === 'respawned') {
+        if (this.onRespawnedCallback) {
+          this.onRespawnedCallback(data);
+        }
       }
     };
 
@@ -126,6 +138,16 @@ export class OnlineRoomClient {
       x: Math.round(targetWorldX),
       y: Math.round(targetWorldY)
     });
+  }
+
+  sendSplit() {
+    if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.sendRaw({ type: 'split' });
+  }
+
+  sendRespawn() {
+    if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
+    this.sendRaw({ type: 'respawn' });
   }
 
   sendRaw(obj) {
