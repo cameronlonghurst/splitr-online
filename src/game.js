@@ -6,6 +6,29 @@
 
 import { OnlineRoomClient } from './onlineAdapter.js';
 
+// Default Brain-Rot Names Generator
+export const BRAIN_ROT_NAMES = [
+  "Skibidi", "Sigma", "Alpha", "Beta", "Rizzler", "Fanum Tax",
+  "Mewing", "Gyatt", "Grimace", "Baby Gronk", "Livvy Dunne",
+  "Kai Cenat", "Looksmaxxer", "Bussin", "Edging", "GigaChad",
+  "Ohio", "Cap", "No Cap", "Cooked", "Let Him Cook",
+  "Delulu", "Glazing", "Brainrot", "Mogger", "EdgeLord",
+  "Yapology", "Sussus Amogus"
+];
+
+export function getRandomBrainRotName() {
+  return BRAIN_ROT_NAMES[Math.floor(Math.random() * BRAIN_ROT_NAMES.length)];
+}
+
+// 8 Vibrant Palette Colors (excluding black and white)
+export const VIBRANT_PALETTE = [
+  '#FF1744', '#00E676', '#2979FF', '#FFEA00', '#FF9100', '#D500F9', '#00E5FF', '#FF4081'
+];
+
+export function getRandomPaletteColor() {
+  return VIBRANT_PALETTE[Math.floor(Math.random() * VIBRANT_PALETTE.length)];
+}
+
 (function () {
   'use strict';
 
@@ -66,11 +89,7 @@ import { OnlineRoomClient } from './onlineAdapter.js';
   ];
 
   // Random Nickname Generator List
-  const RANDOM_NAMES = [
-    'Sirius', 'Apex', 'Specter', 'Viper', 'Zen', 'Eclipse', 'Nova', 'Pulse',
-    'Phantom', 'Mirage', 'Titan', 'Aero', 'Blaze', 'Echo', 'Frost', 'Onyx',
-    'Kage', 'Volt', 'Hyperion', 'Vortex', 'Orion', 'Astral', 'Sol', 'Cosmo'
-  ];
+  const RANDOM_NAMES = BRAIN_ROT_NAMES;
 
   // Smart Arena Bots
   const BOT_PROFILES = [
@@ -393,8 +412,12 @@ import { OnlineRoomClient } from './onlineAdapter.js';
 
       // Identity & State
       this.localPlayerId = 'p_' + Math.random().toString(36).substring(2, 9);
-      this.localNickname = localStorage.getItem('splitr_nick') || 'Player';
-      this.localColor = localStorage.getItem('splitr_color') || '#111111';
+      let savedNick = localStorage.getItem('splitr_nick');
+      if (!savedNick || savedNick === 'Player') {
+        savedNick = getRandomBrainRotName();
+      }
+      this.localNickname = savedNick;
+      this.localColor = getRandomPaletteColor();
 
       const nickInput = document.getElementById('inputNickname');
       if (nickInput) nickInput.value = this.localNickname;
@@ -728,11 +751,11 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       window.addEventListener('click', unlockAudio);
       window.addEventListener('keydown', unlockAudio);
 
-      // Random Name Button
+      // Random Name Button (Brainrot Name Generator)
       const btnRandom = document.getElementById('btnRandomName');
       if (btnRandom) {
         btnRandom.addEventListener('click', () => {
-          const randomNick = RANDOM_NAMES[Math.floor(Math.random() * RANDOM_NAMES.length)];
+          const randomNick = getRandomBrainRotName();
           const inputNick = document.getElementById('inputNickname');
           if (inputNick) {
             inputNick.value = randomNick;
@@ -742,21 +765,6 @@ import { OnlineRoomClient } from './onlineAdapter.js';
           }
         });
       }
-
-      // Color Swatches
-      document.querySelectorAll('.color-swatch').forEach(btn => {
-        btn.addEventListener('click', () => {
-          document.querySelectorAll('.color-swatch').forEach(b => {
-            b.classList.remove('ring-2', 'ring-[#111111]', 'dark:ring-white', 'scale-110');
-            b.classList.add('hover:scale-105');
-          });
-          btn.classList.add('ring-2', 'ring-[#111111]', 'dark:ring-white', 'scale-110');
-          btn.classList.remove('hover:scale-105');
-          this.localColor = btn.dataset.color || '#111111';
-          try { localStorage.setItem('splitr_color', this.localColor); } catch (_) {}
-          this.updateAvatarPreview();
-        });
-      });
 
       // Nickname input
       const inputNick = document.getElementById('inputNickname');
@@ -768,13 +776,22 @@ import { OnlineRoomClient } from './onlineAdapter.js';
         });
       }
 
-      // Primary Mode Buttons: Play Normal & Play Online
+      // Fetch live room count periodically and on hover
+      this.fetchOnlinePlayerCount();
+      setInterval(() => {
+        if (!this.isOnlineMode) {
+          this.fetchOnlinePlayerCount();
+        }
+      }, 7000);
+
+      // Primary Mode Buttons: Play Offline & Play Online
       const btnPlayNormal = document.getElementById('btnPlayNormal');
       if (btnPlayNormal) {
         btnPlayNormal.addEventListener('click', () => this.startNormalGame());
       }
       const btnPlayOnline = document.getElementById('btnPlayOnline');
       if (btnPlayOnline) {
+        btnPlayOnline.addEventListener('mouseenter', () => this.fetchOnlinePlayerCount());
         btnPlayOnline.addEventListener('click', () => this.startOnlineGame());
       }
       const btnPlay = document.getElementById('btnPlay');
@@ -992,21 +1009,39 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       if (this.soundEnabled) this.initAudio();
     }
 
+    fetchOnlinePlayerCount() {
+      fetch('/api/room/public')
+        .then(res => res.json())
+        .then(data => {
+          const count = typeof data.connectedPlayers === 'number' ? data.connectedPlayers : 0;
+          const badge = document.getElementById('onlinePlayerCountBadge');
+          const tooltip = document.getElementById('onlineCountTooltipText');
+          if (badge) {
+            badge.textContent = `${count} Online`;
+          }
+          if (tooltip) {
+            tooltip.textContent = `${count} player${count === 1 ? '' : 's'} active in arena`;
+          }
+        })
+        .catch(() => {
+          const badge = document.getElementById('onlinePlayerCountBadge');
+          const tooltip = document.getElementById('onlineCountTooltipText');
+          if (badge) badge.textContent = 'Active';
+          if (tooltip) tooltip.textContent = 'Public room active';
+        });
+    }
+
     updateAvatarPreview() {
       const nickInput = document.getElementById('inputNickname');
       const nickname = (nickInput ? nickInput.value.trim() : '') || 'Player';
 
       if (this.previewCellAvatar) {
-        this.previewCellAvatar.style.backgroundColor = this.localColor || '#111111';
-        this.previewCellAvatar.style.borderColor = this.isDarkMode ? '#FFFFFF' : '#111111';
+        this.previewCellAvatar.style.backgroundColor = this.localColor || '#FF1744';
+        this.previewCellAvatar.style.borderColor = '#000000';
       }
       if (this.previewCellName) {
         this.previewCellName.textContent = nickname;
-        if (this.localColor === '#F7F7F5' || this.localColor === '#ffffff') {
-          this.previewCellName.className = 'font-serif text-sm sm:text-base font-bold tracking-tight truncate max-w-[86px] sm:max-w-[100px] text-center px-1 text-[#111111]';
-        } else {
-          this.previewCellName.className = 'font-serif text-sm sm:text-base font-bold tracking-tight truncate max-w-[86px] sm:max-w-[100px] text-center px-1 text-white';
-        }
+        this.previewCellName.className = 'font-serif text-sm sm:text-base font-bold tracking-tight truncate max-w-[86px] sm:max-w-[100px] text-center px-1 text-white';
       }
     }
 
@@ -1127,6 +1162,8 @@ import { OnlineRoomClient } from './onlineAdapter.js';
     // --- GAME START & MODES ---
     startNormalGame() {
       this.isOnlineMode = false;
+      this.localColor = getRandomPaletteColor();
+      this.updateAvatarPreview();
       if (this.onlineClient) this.onlineClient.disconnect();
       this.hideOnlineErrorModal();
       this.startMatch(false);
@@ -1135,6 +1172,8 @@ import { OnlineRoomClient } from './onlineAdapter.js';
     startOnlineGame() {
       const inputNick = document.getElementById('inputNickname');
       this.localNickname = (inputNick ? inputNick.value.trim() : '') || 'Player';
+      this.localColor = getRandomPaletteColor();
+      this.updateAvatarPreview();
 
       this.isOnlineMode = true;
       this.isHost = false;
@@ -2681,6 +2720,34 @@ import { OnlineRoomClient } from './onlineAdapter.js';
           lc.radius = (lc.radius || targetR) + (targetR - (lc.radius || targetR)) * Math.min(1, dt * 5.0);
         }
 
+        // Rigid Sibling Separation for predicted local cells (No overlapping/collapsing)
+        if (this.onlineLocalCells.size >= 2) {
+          const localList = Array.from(this.onlineLocalCells.values());
+          for (let pass = 0; pass < 2; pass++) {
+            for (let i = 0; i < localList.length; i++) {
+              for (let j = i + 1; j < localList.length; j++) {
+                const c1 = localList[i];
+                const c2 = localList[j];
+                const r1 = c1.radius || Math.sqrt(c1.mass * 100);
+                const r2 = c2.radius || Math.sqrt(c2.mass * 100);
+                const dx = c2.x - c1.x;
+                const dy = c2.y - c1.y;
+                const dist = Math.hypot(dx, dy) || 0.001;
+                const minDist = r1 + r2;
+                if (dist < minDist) {
+                  const overlap = minDist - dist;
+                  const nx = dx / dist;
+                  const ny = dy / dist;
+                  c1.x -= nx * overlap * 0.5;
+                  c1.y -= ny * overlap * 0.5;
+                  c2.x += nx * overlap * 0.5;
+                  c2.y += ny * overlap * 0.5;
+                }
+              }
+            }
+          }
+        }
+
         // 2. Linear Interpolation (Lerp) for Remote Players Sub-cells
         for (const rp of this.onlineRemotePlayers.values()) {
           for (const rc of rp.cells.values()) {
@@ -3020,42 +3087,46 @@ import { OnlineRoomClient } from './onlineAdapter.js';
         ctx.fillStyle = c.color;
         ctx.fill();
 
-        // High contrast borders matching offline mode
-        const isSelf = c.playerId === this.localPlayerId;
-        const borderCol = this.isDarkMode
-          ? (c.color === '#111111' ? '#FFFFFF' : '#0E0F14')
-          : '#111111';
-
-        ctx.strokeStyle = borderCol;
-        ctx.lineWidth = isSelf ? Math.max(3, c.radius * 0.06) : Math.max(2, c.radius * 0.045);
+        // Clean, solid black outline (#000000) with prominent stroke width
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = Math.max(3, c.radius * 0.06);
         ctx.stroke();
 
-        // Name & Mass text inside cell matching offline mode
-        if (c.radius > 16) {
-          const fontSize = Math.max(12, Math.floor(c.radius * 0.32));
+        // In-cell names & mass scaling strictly inside boundaries
+        if (c.radius >= 18) {
+          let fontSize = Math.max(10, Math.min(c.radius * 0.32, 28));
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
-          const isDarkCell = (c.color !== '#F7F7F5' && c.color !== '#ffffff');
-          const textColor = isDarkCell ? '#FFFFFF' : '#111111';
-          const strokeColor = isDarkCell ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)';
-
           ctx.font = `700 ${fontSize}px ${fontFam}`;
-          ctx.lineWidth = Math.max(2.5, fontSize * 0.18);
-          ctx.strokeStyle = strokeColor;
-          ctx.fillStyle = textColor;
+          const maxTextW = c.radius * 1.6;
+          let textW = ctx.measureText(c.name).width;
 
-          if (this.showMass) {
-            ctx.strokeText(c.name, 0, -fontSize * 0.28);
-            ctx.fillText(c.name, 0, -fontSize * 0.28);
+          // Scale font size down smoothly if name exceeds in-cell boundaries
+          if (textW > maxTextW) {
+            fontSize = Math.max(8, Math.floor(fontSize * (maxTextW / textW)));
+            ctx.font = `700 ${fontSize}px ${fontFam}`;
+          }
 
-            ctx.font = `700 ${Math.floor(fontSize * 0.68)}px system-ui, -apple-system, sans-serif`;
-            ctx.lineWidth = Math.max(2, fontSize * 0.14);
-            ctx.strokeText(Math.round(c.mass), 0, fontSize * 0.65);
-            ctx.fillText(Math.round(c.mass), 0, fontSize * 0.65);
-          } else {
-            ctx.strokeText(c.name, 0, 0);
-            ctx.fillText(c.name, 0, 0);
+          // If cell is too tiny to fit legibly, omit text
+          if (fontSize >= 9) {
+            ctx.lineWidth = Math.max(2, fontSize * 0.16);
+            ctx.strokeStyle = '#000000';
+            ctx.fillStyle = '#FFFFFF';
+
+            if (this.showMass && c.radius >= 24) {
+              const massFontSize = Math.max(8, Math.floor(fontSize * 0.65));
+              ctx.strokeText(c.name, 0, -fontSize * 0.28);
+              ctx.fillText(c.name, 0, -fontSize * 0.28);
+
+              ctx.font = `700 ${massFontSize}px system-ui, -apple-system, sans-serif`;
+              ctx.lineWidth = Math.max(1.8, massFontSize * 0.14);
+              ctx.strokeText(Math.round(c.mass), 0, fontSize * 0.62);
+              ctx.fillText(Math.round(c.mass), 0, fontSize * 0.62);
+            } else {
+              ctx.strokeText(c.name, 0, 0);
+              ctx.fillText(c.name, 0, 0);
+            }
           }
         }
 
@@ -3281,7 +3352,7 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       const top10 = rankings.slice(0, 10);
       for (let i = 0; i < top10.length; i++) {
         const item = top10[i];
-        const nameClass = item.isLocal ? 'font-bold underline' : 'font-normal';
+        const nameClass = item.isLocal ? 'font-bold' : 'font-normal';
 
         html += `
           <div class="flex items-center justify-between py-0.5 text-xs text-[#111111] dark:text-[#F3F4F6]">

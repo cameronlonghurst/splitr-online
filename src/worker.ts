@@ -639,51 +639,65 @@ export class GameRoom extends DurableObject {
       }
     }
 
-    // 5. Sibling cell interaction (gentle elastic separation & recombining)
+    // 5. Sibling cell interaction: Rigid Sibling Separation & Recombining
     for (const session of this.players.values()) {
       if (session.isDead || session.cells.length < 2) continue;
       const cells = session.cells;
 
-      for (let i = 0; i < cells.length; i++) {
-        for (let j = i + 1; j < cells.length; j++) {
-          const c1 = cells[i];
-          const c2 = cells[j];
-          const r1 = Math.sqrt(c1.mass * 100);
-          const r2 = Math.sqrt(c2.mass * 100);
-          const dx = c2.x - c1.x;
-          const dy = c2.y - c1.y;
-          const dist = Math.hypot(dx, dy) || 1;
-          const minDist = r1 + r2;
+      // Multiple passes to resolve multi-cell clusters rigidly without collapsing
+      for (let pass = 0; pass < 2; pass++) {
+        for (let i = 0; i < cells.length; i++) {
+          for (let j = i + 1; j < cells.length; j++) {
+            const c1 = cells[i];
+            const c2 = cells[j];
+            if (!c1 || !c2) continue;
+            const r1 = Math.sqrt(c1.mass * 100);
+            const r2 = Math.sqrt(c2.mass * 100);
+            const dx = c2.x - c1.x;
+            const dy = c2.y - c1.y;
+            const dist = Math.hypot(dx, dy) || 0.001;
+            const minDist = r1 + r2;
 
-          // Recombination allowed if both cooldown timers expired
-          if (c1.recombineTimer <= 0 && c2.recombineTimer <= 0) {
-            if (dist < Math.max(r1, r2)) {
-              if (c1.mass >= c2.mass) {
-                c1.mass += c2.mass;
-                cells.splice(j, 1);
-                j--;
-              } else {
-                c2.mass += c1.mass;
-                cells.splice(i, 1);
-                i--;
-                break;
+            // Recombination allowed only when both cooldown timers expired
+            if (c1.recombineTimer <= 0 && c2.recombineTimer <= 0) {
+              if (dist < Math.max(r1, r2)) {
+                if (c1.mass >= c2.mass) {
+                  c1.mass += c2.mass;
+                  cells.splice(j, 1);
+                  j--;
+                } else {
+                  c2.mass += c1.mass;
+                  cells.splice(i, 1);
+                  i--;
+                  break;
+                }
               }
-            }
-          } else if (dist < minDist) {
-            // Elastic separation to push overlapping owned cells apart without stacking
-            const overlap = minDist - dist;
-            const normalX = dx / dist;
-            const normalY = dy / dist;
-            const pushForce = Math.min(overlap * 0.45, 25);
-            c1.x -= normalX * pushForce * 0.5;
-            c1.y -= normalY * pushForce * 0.5;
-            c2.x += normalX * pushForce * 0.5;
-            c2.y += normalY * pushForce * 0.5;
+            } else if (dist < minDist) {
+              // Rigid Sibling Separation: push apart along collision normal so they only touch at edges
+              const overlap = minDist - dist;
+              const normalX = dx / dist;
+              const normalY = dy / dist;
+              c1.x -= normalX * overlap * 0.5;
+              c1.y -= normalY * overlap * 0.5;
+              c2.x += normalX * overlap * 0.5;
+              c2.y += normalY * overlap * 0.5;
 
-            c1.x = Math.max(r1, Math.min(MAP_SIZE - r1, c1.x));
-            c1.y = Math.max(r1, Math.min(MAP_SIZE - r1, c1.y));
-            c2.x = Math.max(r2, Math.min(MAP_SIZE - r2, c2.x));
-            c2.y = Math.max(r2, Math.min(MAP_SIZE - r2, c2.y));
+              // Neutralize closing relative velocity along normal
+              const relVx = c2.vx - c1.vx;
+              const relVy = c2.vy - c1.vy;
+              const normalVel = relVx * normalX + relVy * normalY;
+              if (normalVel < 0) {
+                c1.vx += normalX * normalVel * 0.5;
+                c1.vy += normalY * normalVel * 0.5;
+                c2.vx -= normalX * normalVel * 0.5;
+                c2.vy -= normalY * normalVel * 0.5;
+              }
+
+              c1.x = Math.max(r1, Math.min(MAP_SIZE - r1, c1.x));
+              c1.y = Math.max(r1, Math.min(MAP_SIZE - r1, c1.y));
+              c2.x = Math.max(r2, Math.min(MAP_SIZE - r2, c2.x));
+              c2.y = Math.max(r2, Math.min(MAP_SIZE - r2, c2.y));
+            }
           }
         }
       }

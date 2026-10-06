@@ -428,9 +428,8 @@
               </div>
             </div>
 
-            <!-- Right: Name Input + Randomizer & Color Swatches -->
+            <!-- Right: Name Input + Randomizer -->
             <div class="flex-1 flex flex-col gap-2 min-w-0">
-              <!-- Name Input & Random Button -->
               <div class="flex items-center gap-1.5">
                 <input
                   id="inputNickname"
@@ -438,50 +437,53 @@
                   maxlength="16"
                   value="Player"
                   placeholder="Your nickname..."
-                  class="flex-1 border border-[#111111] dark:border-zinc-700 rounded-lg px-2.5 py-1.5 text-xs font-bold text-[#111111] dark:text-white bg-white dark:bg-[#1A1B24] focus:outline-none focus:ring-1 focus:ring-[#111111] dark:focus:ring-white"
+                  class="flex-1 border border-[#111111] dark:border-zinc-700 rounded-lg px-2.5 py-2 text-xs font-bold text-[#111111] dark:text-white bg-white dark:bg-[#1A1B24] focus:outline-none focus:ring-1 focus:ring-[#111111] dark:focus:ring-white"
                 />
                 <button
                   id="btnRandomName"
                   type="button"
-                  class="px-2.5 py-1.5 border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-[#1A1B24] hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer transition-colors shrink-0"
-                  title="Generate Random Nickname"
+                  class="px-2.5 py-2 border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-[#1A1B24] hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-semibold text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer transition-colors shrink-0"
+                  title="Generate Brainrot Nickname"
                 >
                   Random
                 </button>
-              </div>
-
-              <!-- Color Tone Swatches -->
-              <div class="flex items-center gap-1.5 flex-wrap">
-                <span class="text-[10px] font-mono uppercase font-bold text-zinc-400 mr-1">Tone:</span>
-                <button class="color-swatch w-5 h-5 rounded-full border border-black dark:border-white ring-2 ring-[#111111] dark:ring-white scale-110 cursor-pointer transition-transform" data-color="#111111" style="background:#111111;" title="Obsidian"></button>
-                <button class="color-swatch w-5 h-5 rounded-full border border-zinc-400 hover:scale-105 cursor-pointer transition-transform" data-color="#F7F7F5" style="background:#F7F7F5;" title="Ivory"></button>
-                <button class="color-swatch w-5 h-5 rounded-full border border-zinc-400 hover:scale-105 cursor-pointer transition-transform" data-color="#2563EB" style="background:#2563EB;" title="Blue"></button>
-                <button class="color-swatch w-5 h-5 rounded-full border border-zinc-400 hover:scale-105 cursor-pointer transition-transform" data-color="#10B981" style="background:#10B981;" title="Emerald"></button>
-                <button class="color-swatch w-5 h-5 rounded-full border border-zinc-400 hover:scale-105 cursor-pointer transition-transform" data-color="#F59E0B" style="background:#F59E0B;" title="Amber"></button>
-                <button class="color-swatch w-5 h-5 rounded-full border border-zinc-400 hover:scale-105 cursor-pointer transition-transform" data-color="#EF4444" style="background:#EF4444;" title="Crimson"></button>
-                <button class="color-swatch w-5 h-5 rounded-full border border-zinc-400 hover:scale-105 cursor-pointer transition-transform" data-color="#8B5CF6" style="background:#8B5CF6;" title="Plum"></button>
-                <button class="color-swatch w-5 h-5 rounded-full border border-zinc-400 hover:scale-105 cursor-pointer transition-transform" data-color="#06B6D4" style="background:#06B6D4;" title="Cyan"></button>
               </div>
             </div>
           </div>
 
           <!-- ============================================== -->
-          <!-- PRIMARY MODES: PLAY NORMAL & PLAY ONLINE       -->
+          <!-- PRIMARY MODES: PLAY ONLINE & PLAY OFFLINE      -->
           <!-- ============================================== -->
           <div class="flex flex-col sm:flex-row items-stretch gap-3">
+            <!-- Play Online (Prominent Width, Black #000000, Tooltip on Hover) -->
+            <div class="relative group flex-[1.6]">
+              <button
+                id="btnPlayOnline"
+                class="w-full py-4 px-5 bg-[#000000] hover:bg-zinc-900 text-white rounded-xl text-base font-extrabold tracking-wide flex flex-col items-center justify-center gap-0.5 cursor-pointer shadow-md transition-all border border-black"
+              >
+                <span class="text-base font-extrabold text-white flex items-center gap-2">
+                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                  Play Online
+                </span>
+                <span id="btnOnlineSubtext" class="text-[11px] font-medium text-zinc-300">
+                  Public Arena · <span id="onlinePlayerCountBadge">Live</span>
+                </span>
+              </button>
+
+              <!-- Live Player Count Tooltip on Hover -->
+              <div id="onlineTooltip" class="absolute -top-9 left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-black/95 text-white text-[11px] font-mono px-3 py-1 rounded-md shadow-xl whitespace-nowrap z-30 border border-zinc-700 flex items-center gap-2">
+                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
+                <span id="onlineCountTooltipText">Connecting to arena...</span>
+              </div>
+            </div>
+
+            <!-- Play Offline (White #ffffff, Dark Text, Noticeably Smaller/Shorter Width) -->
             <button
               id="btnPlayNormal"
-              class="btn-editorial flex-1 py-3.5 px-4 rounded-xl text-sm font-bold tracking-wide flex flex-col items-center justify-center gap-0.5 cursor-pointer shadow-sm hover:opacity-90 transition-opacity"
+              class="flex-[0.9] py-3.5 px-3 bg-[#ffffff] hover:bg-zinc-100 dark:bg-white dark:hover:bg-zinc-200 text-[#111111] border border-zinc-300 dark:border-zinc-400 rounded-xl text-xs font-bold tracking-normal flex flex-col items-center justify-center gap-0.5 cursor-pointer shadow-sm transition-all"
             >
-              <span class="text-sm font-bold">Play Normal</span>
-              <span class="text-[10px] font-normal opacity-75">Offline Arena with Bots</span>
-            </button>
-            <button
-              id="btnPlayOnline"
-              class="btn-editorial-secondary flex-1 py-3.5 px-4 rounded-xl text-sm font-bold tracking-wide flex flex-col items-center justify-center gap-0.5 cursor-pointer shadow-sm hover:opacity-90 transition-opacity"
-            >
-              <span class="text-sm font-bold text-emerald-600 dark:text-emerald-400">Play Online</span>
-              <span class="text-[10px] font-normal opacity-75">Shared Public Room</span>
+              <span class="text-xs font-bold text-[#111111]">Play Offline</span>
+              <span class="text-[10px] font-normal text-zinc-500">Solo with Bots</span>
             </button>
           </div>
 
@@ -498,16 +500,14 @@
         </div>
       </main>
 
-      <!-- Minimal Footer -->
+      <!-- Minimal Controls Footer (No Splitr logo, input instructions only) -->
       <footer class="w-full pb-3 px-4 flex justify-center shrink-0">
-        <div class="bg-white/80 dark:bg-[#15161E]/80 border border-[#111111] dark:border-zinc-700 px-5 py-1.5 rounded-full text-xs font-mono text-zinc-600 dark:text-zinc-400 flex items-center gap-3">
-          <span class="font-serif font-bold text-[#111111] dark:text-white text-sm">Splitr.</span>
+        <div class="bg-white/80 dark:bg-[#15161E]/80 border border-[#111111] dark:border-zinc-700 px-5 py-1.5 rounded-full text-xs font-mono text-zinc-600 dark:text-zinc-400 flex items-center gap-2.5">
+          <span>Mouse to move</span>
           <span>·</span>
-          <span><kbd class="font-bold text-[10px] px-1 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded">Space</kbd> Split</span>
+          <span><kbd class="font-bold text-[10px] px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 text-[#111111] dark:text-white rounded">Space</kbd> to split</span>
           <span>·</span>
-          <span><kbd class="font-bold text-[10px] px-1 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded">W</kbd> Eject</span>
-          <span>·</span>
-          <span><kbd class="font-bold text-[10px] px-1 py-0.5 bg-zinc-200 dark:bg-zinc-800 rounded">T</kbd> Theme</span>
+          <span><kbd class="font-bold text-[10px] px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 text-[#111111] dark:text-white rounded">W</kbd> to eject</span>
         </div>
       </footer>
     </div>
