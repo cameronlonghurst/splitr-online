@@ -443,7 +443,9 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       // Online WebSocket Client & State
       this.onlineClient = new OnlineRoomClient();
       this.isOnlineMode = false;
-      this.onlineLocalPlayer = { x: MAP_SIZE / 2, y: MAP_SIZE / 2 };
+      this.onlineMapSize = 4000;
+      this.onlineFoods = new Map();
+      this.onlineLocalPlayer = { x: 2000, y: 2000, mass: 25, radius: 50, targetRadius: 50 };
       this.onlineRemotePlayers = new Map();
       this.onlineLocalPlayerInitialized = false;
 
@@ -1118,7 +1120,13 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       this.isSpectating = false;
 
       // Online Entities: local predicted player & remote interpolated players
-      this.onlineLocalPlayer = { x: MAP_SIZE / 2, y: MAP_SIZE / 2 };
+      this.onlineLocalPlayer = {
+        x: this.onlineMapSize / 2,
+        y: this.onlineMapSize / 2,
+        mass: 25,
+        radius: 50,
+        targetRadius: 50
+      };
       this.onlineRemotePlayers = new Map();
       this.onlineLocalPlayerInitialized = false;
 
@@ -1142,6 +1150,32 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       this.onlineClient.connect({
         nickname: this.localNickname,
         color: this.localColor,
+        onInit: (data) => {
+          if (data && data.mapSize) {
+            this.onlineMapSize = data.mapSize;
+          }
+          this.onlineFoods.clear();
+          if (data && Array.isArray(data.foods)) {
+            for (const f of data.foods) {
+              this.onlineFoods.set(f.id, f);
+            }
+          }
+          if (data && Array.isArray(data.players)) {
+            const me = data.players.find((p) => p.id === data.playerId);
+            if (me && me.mass) {
+              this.onlineLocalPlayer.mass = me.mass;
+              this.onlineLocalPlayer.radius = Math.sqrt(me.mass * 100);
+              this.onlineLocalPlayer.targetRadius = Math.sqrt(me.mass * 100);
+            }
+          }
+          if (data && data.spawn) {
+            this.onlineLocalPlayer.x = data.spawn.x;
+            this.onlineLocalPlayer.y = data.spawn.y;
+            this.camX = data.spawn.x;
+            this.camY = data.spawn.y;
+            this.onlineLocalPlayerInitialized = true;
+          }
+        },
         onConnected: (data) => {
           if (this.statPing) this.statPing.textContent = 'ONLINE';
           if (this.statPingDot) this.statPingDot.className = 'inline-block w-2 h-2 rounded-full bg-emerald-500';
@@ -1156,12 +1190,31 @@ import { OnlineRoomClient } from './onlineAdapter.js';
             this.onlineLocalPlayerInitialized = true;
           }
         },
-        onState: (serverPlayers, localId) => {
+        onState: (stateData, localId) => {
           if (localId) this.localPlayerId = localId;
+
+          const serverPlayers = Array.isArray(stateData.players) ? stateData.players : [];
+
+          // Process eaten and newly spawned food pellets
+          if (Array.isArray(stateData.eaten)) {
+            for (const id of stateData.eaten) {
+              this.onlineFoods.delete(id);
+            }
+          }
+          if (Array.isArray(stateData.newFoods)) {
+            for (const f of stateData.newFoods) {
+              this.onlineFoods.set(f.id, f);
+            }
+          }
 
           const currentIds = new Set();
           for (const sp of serverPlayers) {
+            // Check if this entity is the local player
             if (sp.id === this.localPlayerId) {
+              if (sp.mass) {
+                this.onlineLocalPlayer.mass = sp.mass;
+                this.onlineLocalPlayer.targetRadius = Math.sqrt(sp.mass * 100);
+              }
               if (!this.onlineLocalPlayerInitialized) {
                 this.onlineLocalPlayer.x = sp.x;
                 this.onlineLocalPlayer.y = sp.y;
@@ -1172,10 +1225,12 @@ import { OnlineRoomClient } from './onlineAdapter.js';
               continue;
             }
 
-            // Remote players: store as targetX and targetY for smooth interpolation
+            // Remote players: store as targetX, targetY and targetRadius for smooth interpolation
             currentIds.add(sp.id);
             let rp = this.onlineRemotePlayers.get(sp.id);
             if (!rp) {
+              const startMass = sp.mass || 25;
+              const r = Math.sqrt(startMass * 100);
               rp = {
                 id: sp.id,
                 name: sp.name,
@@ -1183,7 +1238,10 @@ import { OnlineRoomClient } from './onlineAdapter.js';
                 x: sp.x,
                 y: sp.y,
                 targetX: sp.x,
-                targetY: sp.y
+                targetY: sp.y,
+                mass: startMass,
+                radius: r,
+                targetRadius: r
               };
               this.onlineRemotePlayers.set(sp.id, rp);
             } else {
@@ -1191,6 +1249,10 @@ import { OnlineRoomClient } from './onlineAdapter.js';
               rp.targetY = sp.y;
               rp.name = sp.name;
               rp.color = sp.color;
+              if (sp.mass) {
+                rp.mass = sp.mass;
+                rp.targetRadius = Math.sqrt(sp.mass * 100);
+              }
             }
           }
 
@@ -1199,6 +1261,10 @@ import { OnlineRoomClient } from './onlineAdapter.js';
             if (!currentIds.has(id)) {
               this.onlineRemotePlayers.delete(id);
             }
+          }
+
+          if (this.hudMass) {
+            this.hudMass.textContent = Math.round(this.onlineLocalPlayer.mass || 25);
           }
 
           if (this.playerTotalCount) {
@@ -2422,16 +2488,25 @@ import { OnlineRoomClient } from './onlineAdapter.js';
           const dy = this.mouseWorldY - this.onlineLocalPlayer.y;
           const dist = Math.hypot(dx, dy);
 
+          const currentMass = this.onlineLocalPlayer.mass || 25;
+          const speed = Math.max(90, 960 / Math.pow(currentMass, 0.38));
+
           if (dist > 8) {
-            const speed = 280; // responsive movement speed
             const moveStep = Math.min(dist, speed * dt);
             this.onlineLocalPlayer.x += (dx / dist) * moveStep;
             this.onlineLocalPlayer.y += (dy / dist) * moveStep;
 
-            // Clamping to map boundaries
-            this.onlineLocalPlayer.x = Math.max(35, Math.min(MAP_SIZE - 35, this.onlineLocalPlayer.x));
-            this.onlineLocalPlayer.y = Math.max(35, Math.min(MAP_SIZE - 35, this.onlineLocalPlayer.y));
+            // Clamping to map boundaries taking radius into account
+            const mapW = this.onlineMapSize || 4000;
+            const r = this.onlineLocalPlayer.radius || 50;
+            this.onlineLocalPlayer.x = Math.max(r, Math.min(mapW - r, this.onlineLocalPlayer.x));
+            this.onlineLocalPlayer.y = Math.max(r, Math.min(mapW - r, this.onlineLocalPlayer.y));
           }
+
+          // Smooth radius expansion for local player
+          const targetR = this.onlineLocalPlayer.targetRadius || Math.sqrt(currentMass * 100);
+          const curR = this.onlineLocalPlayer.radius || targetR;
+          this.onlineLocalPlayer.radius = curR + (targetR - curR) * Math.min(1, dt * 5.0);
 
           // Transmit predicted position to server
           if (this.onlineClient && this.onlineClient.isConnected) {
@@ -2440,10 +2515,14 @@ import { OnlineRoomClient } from './onlineAdapter.js';
         }
 
         // 2. Linear Interpolation (Lerp) for Remote Players:
-        // Smoothly slide remote players toward their target coordinates each frame
+        // Smoothly slide remote players toward their target coordinates each frame and smoothly update radius
         for (const rp of this.onlineRemotePlayers.values()) {
           rp.x += (rp.targetX - rp.x) * 0.2;
           rp.y += (rp.targetY - rp.y) * 0.2;
+
+          const targetR = rp.targetRadius || Math.sqrt((rp.mass || 25) * 100);
+          const curR = rp.radius || targetR;
+          rp.radius = curR + (targetR - curR) * Math.min(1, dt * 5.0);
         }
       } else if (this.isHost) {
         this.updateBotAI(dt);
@@ -2475,12 +2554,20 @@ import { OnlineRoomClient } from './onlineAdapter.js';
           currY = this.onlineLocalPlayer.y;
           this.camX += (currX - this.camX) * Math.min(1, dt * 10);
           this.camY += (currY - this.camY) * Math.min(1, dt * 10);
-          this.camZoom = 0.65;
+
+          // Dynamic zoom scaling with player radius
+          const targetZoom = Math.max(0.3, Math.min(0.9, 50 / (this.onlineLocalPlayer.radius || 50)));
+          this.camZoom += (targetZoom - this.camZoom) * Math.min(1, dt * 2.5);
+
           if (this.hudCoords) {
             this.hudCoords.textContent = `${Math.round(currX)}, ${Math.round(currY)}`;
           }
-          if (this.hudMass) this.hudMass.textContent = '50';
-          if (this.hudCells) this.hudCells.innerHTML = '1<span class="text-zinc-500 text-xs">/1</span>';
+          if (this.hudMass) {
+            this.hudMass.textContent = Math.round(this.onlineLocalPlayer.mass || 25);
+          }
+          if (this.hudCells) {
+            this.hudCells.innerHTML = '1<span class="text-zinc-500 text-xs">/1</span>';
+          }
         }
       } else {
         const localPlayer = this.players.get(this.localPlayerId);
@@ -2558,6 +2645,7 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       this.drawGrid(ctx);
       this.drawBoundaries(ctx);
       if (this.isOnlineMode) {
+        this.drawOnlineFoods(ctx);
         this.drawOnlinePlayers(ctx);
       } else {
         this.drawFoods(ctx);
@@ -2570,12 +2658,43 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       ctx.restore();
     }
 
+    drawOnlineFoods(ctx) {
+      const halfW = (this.canvas.width / 2) / this.camZoom + 30;
+      const halfH = (this.canvas.height / 2) / this.camZoom + 30;
+      const left = this.camX - halfW;
+      const right = this.camX + halfW;
+      const top = this.camY - halfH;
+      const bottom = this.camY + halfH;
+      const isDark = this.isDarkMode;
+      const foodRadius = 8;
+
+      for (const food of this.onlineFoods.values()) {
+        if (
+          food.x < left ||
+          food.x > right ||
+          food.y < top ||
+          food.y > bottom
+        ) {
+          continue;
+        }
+
+        ctx.beginPath();
+        ctx.arc(food.x, food.y, foodRadius, 0, Math.PI * 2);
+        ctx.fillStyle = food.color || '#3B82F6';
+        ctx.fill();
+
+        ctx.strokeStyle = isDark ? 'rgba(255, 255, 255, 0.75)' : 'rgba(17, 17, 17, 0.75)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+      }
+    }
+
     drawOnlinePlayers(ctx) {
       const isDark = this.isDarkMode;
-      const radius = 35; // Standard human circle for milestone 1
 
-      // 1. Draw remote players (smoothly interpolated positions)
+      // 1. Draw remote players (smoothly interpolated positions and radii)
       for (const p of this.onlineRemotePlayers.values()) {
+        const radius = Math.max(20, p.radius || Math.sqrt((p.mass || 25) * 100));
         ctx.save();
         ctx.beginPath();
         ctx.arc(p.x, p.y, radius, 0, Math.PI * 2);
@@ -2585,7 +2704,7 @@ import { OnlineRoomClient } from './onlineAdapter.js';
         ctx.fill();
 
         // Stroke ring
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 2.5;
         ctx.strokeStyle = isDark ? '#374151' : '#D1D5DB';
         ctx.stroke();
 
@@ -2597,15 +2716,23 @@ import { OnlineRoomClient } from './onlineAdapter.js';
         ctx.strokeStyle = isDark ? '#000000' : '#FFFFFF';
         ctx.lineWidth = 3;
         const name = p.name || 'Player';
-        ctx.strokeText(name, p.x, p.y - radius - 12);
-        ctx.fillText(name, p.x, p.y - radius - 12);
+        ctx.strokeText(name, p.x, p.y - radius - 14);
+        ctx.fillText(name, p.x, p.y - radius - 14);
+
+        // Mass text inside player circle if large enough
+        if (radius >= 32) {
+          ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
+          ctx.fillStyle = '#FFFFFF';
+          ctx.fillText(Math.round(p.mass || 25), p.x, p.y);
+        }
 
         ctx.restore();
       }
 
-      // 2. Draw local player (immediate client-side predicted position)
+      // 2. Draw local player (immediate client-side predicted position and smoothly scaled radius)
       if (this.onlineLocalPlayer) {
         const lp = this.onlineLocalPlayer;
+        const radius = Math.max(20, lp.radius || Math.sqrt((lp.mass || 25) * 100));
         ctx.save();
         ctx.beginPath();
         ctx.arc(lp.x, lp.y, radius, 0, Math.PI * 2);
@@ -2627,25 +2754,31 @@ import { OnlineRoomClient } from './onlineAdapter.js';
         ctx.strokeStyle = isDark ? '#000000' : '#FFFFFF';
         ctx.lineWidth = 3;
         const name = this.localNickname || 'Player';
-        ctx.strokeText(name, lp.x, lp.y - radius - 12);
-        ctx.fillText(name, lp.x, lp.y - radius - 12);
+        ctx.strokeText(name, lp.x, lp.y - radius - 14);
+        ctx.fillText(name, lp.x, lp.y - radius - 14);
 
-        ctx.font = 'bold 10px system-ui, -apple-system, sans-serif';
+        // Center indicator (YOU / Mass)
+        ctx.font = 'bold 11px system-ui, -apple-system, sans-serif';
         ctx.fillStyle = '#FFFFFF';
-        ctx.fillText('YOU', lp.x, lp.y);
+        if (radius >= 38) {
+          ctx.fillText(`YOU (${Math.round(lp.mass || 25)})`, lp.x, lp.y);
+        } else {
+          ctx.fillText('YOU', lp.x, lp.y);
+        }
 
         ctx.restore();
       }
     }
 
     drawGrid(ctx) {
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 4000) : MAP_SIZE;
       const halfW = (this.canvas.width / 2) / this.camZoom;
       const halfH = (this.canvas.height / 2) / this.camZoom;
 
       const viewLeft = Math.max(0, this.camX - halfW);
-      const viewRight = Math.min(MAP_SIZE, this.camX + halfW);
+      const viewRight = Math.min(currentMapSize, this.camX + halfW);
       const viewTop = Math.max(0, this.camY - halfH);
-      const viewBottom = Math.min(MAP_SIZE, this.camY + halfH);
+      const viewBottom = Math.min(currentMapSize, this.camY + halfH);
 
       const startX = Math.floor(viewLeft / GRID_SIZE) * GRID_SIZE;
       const endX = Math.ceil(viewRight / GRID_SIZE) * GRID_SIZE;
@@ -2667,9 +2800,10 @@ import { OnlineRoomClient } from './onlineAdapter.js';
     }
 
     drawBoundaries(ctx) {
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 4000) : MAP_SIZE;
       ctx.strokeStyle = this.isDarkMode ? '#F3F4F6' : '#111111';
       ctx.lineWidth = 8;
-      ctx.strokeRect(0, 0, MAP_SIZE, MAP_SIZE);
+      ctx.strokeRect(0, 0, currentMapSize, currentMapSize);
     }
 
     drawFoods(ctx) {
@@ -2807,15 +2941,34 @@ import { OnlineRoomClient } from './onlineAdapter.js';
 
     updateLeaderboard() {
       const rankings = [];
-      for (const p of this.players.values()) {
-        if (p.cells.length === 0) continue;
-        const totalMass = p.cells.reduce((sum, c) => sum + c.mass, 0);
-        rankings.push({
-          id: p.id,
-          name: p.name,
-          mass: totalMass,
-          isLocal: p.id === this.localPlayerId
-        });
+      if (this.isOnlineMode) {
+        if (this.onlineLocalPlayer) {
+          rankings.push({
+            id: 'local',
+            name: this.localNickname || 'Player',
+            mass: this.onlineLocalPlayer.mass || 25,
+            isLocal: true
+          });
+        }
+        for (const p of this.onlineRemotePlayers.values()) {
+          rankings.push({
+            id: p.id,
+            name: p.name || 'Player',
+            mass: p.mass || 25,
+            isLocal: false
+          });
+        }
+      } else {
+        for (const p of this.players.values()) {
+          if (p.cells.length === 0) continue;
+          const totalMass = p.cells.reduce((sum, c) => sum + c.mass, 0);
+          rankings.push({
+            id: p.id,
+            name: p.name,
+            mass: totalMass,
+            isLocal: p.id === this.localPlayerId
+          });
+        }
       }
 
       rankings.sort((a, b) => b.mass - a.mass);
@@ -2846,7 +2999,8 @@ import { OnlineRoomClient } from './onlineAdapter.js';
       const h = this.minimapCanvas.height;
 
       mCtx.clearRect(0, 0, w, h);
-      const scale = w / MAP_SIZE;
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 4000) : MAP_SIZE;
+      const scale = w / currentMapSize;
 
       mCtx.fillStyle = this.isDarkMode ? '#12131A' : '#FFFFFF';
       mCtx.fillRect(0, 0, w, h);
@@ -2871,16 +3025,18 @@ import { OnlineRoomClient } from './onlineAdapter.js';
           mCtx.fillStyle = p.color || '#64748B';
           const mx = p.x * scale;
           const my = p.y * scale;
+          const mr = Math.max(2, (p.radius || 35) * scale);
           mCtx.beginPath();
-          mCtx.arc(mx, my, 2, 0, Math.PI * 2);
+          mCtx.arc(mx, my, mr, 0, Math.PI * 2);
           mCtx.fill();
         }
         if (this.onlineLocalPlayer) {
           mCtx.fillStyle = this.isDarkMode ? '#10B981' : '#2563EB';
           const mx = this.onlineLocalPlayer.x * scale;
           const my = this.onlineLocalPlayer.y * scale;
+          const mr = Math.max(3, (this.onlineLocalPlayer.radius || 35) * scale);
           mCtx.beginPath();
-          mCtx.arc(mx, my, 3.5, 0, Math.PI * 2);
+          mCtx.arc(mx, my, mr, 0, Math.PI * 2);
           mCtx.fill();
         }
         return;

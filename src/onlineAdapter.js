@@ -33,10 +33,11 @@ export class OnlineRoomClient {
     return `${protocol}//${host}/api/room/public`;
   }
 
-  connect({ nickname, color, onConnected, onState, onError, onDisconnect }) {
+  connect({ nickname, color, onConnected, onInit, onState, onError, onDisconnect }) {
     this.disconnect();
 
     this.onConnectedCallback = onConnected;
+    this.onInitCallback = onInit;
     this.onStateCallback = onState;
     this.onErrorCallback = onError;
     this.onDisconnectCallback = onDisconnect;
@@ -81,13 +82,17 @@ export class OnlineRoomClient {
 
       if (!data || !data.type) return;
 
-      if (data.type === 'connected') {
+      if (data.type === 'init') {
+        this.localPlayerId = data.playerId;
+        if (this.onInitCallback) this.onInitCallback(data);
+        if (this.onConnectedCallback) this.onConnectedCallback(data);
+      } else if (data.type === 'connected') {
         this.localPlayerId = data.playerId;
         if (this.onConnectedCallback) this.onConnectedCallback(data);
       } else if (data.type === 'state') {
         this.serverPlayers = Array.isArray(data.players) ? data.players : [];
         if (this.onStateCallback) {
-          this.onStateCallback(this.serverPlayers, this.localPlayerId);
+          this.onStateCallback(data, this.localPlayerId);
         }
       }
     };
