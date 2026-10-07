@@ -86,6 +86,37 @@ const EJECT_PELLET_MASS = 15;
 const EJECT_IMPULSE = 800; // initial launch velocity ~800 px/s
 const EJECT_RATE_LIMIT_MS = 110; // ~9 shots/s
 
+// Server-Side Bot Constants & Archetypes
+const TARGET_ROOM_POPULATION = 10;
+type BotArchetype = 'NOOB' | 'HUNTER' | 'FARMER';
+
+interface BotPlayer {
+  id: string;
+  name: string;
+  color: string;
+  archetype: BotArchetype;
+  targetX: number;
+  targetY: number;
+  cells: ServerCell[];
+  isDead: boolean;
+  lastSplitTime: number;
+  wanderAngle: number;
+}
+
+const BRAIN_ROT_NAMES = [
+  "Skibidi", "Sigma", "Alpha", "Beta", "Rizzler", "Fanum Tax",
+  "Mewing", "Gyatt", "Grimace", "Baby Gronk", "Livvy Dunne",
+  "Kai Cenat", "Looksmaxxer", "Bussin", "Edging", "GigaChad",
+  "Ohio", "Cap", "No Cap", "Cooked", "Let Him Cook",
+  "Delulu", "Glazing", "Brainrot", "Mogger", "EdgeLord",
+  "Yapology", "Sussus Amogus"
+];
+
+const BOT_COLORS = [
+  '#FF1744', '#00E676', '#2979FF', '#FFEA00', '#FF9100', '#D500F9', '#00E5FF', '#FF4081',
+  '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#06B6D4', '#F97316'
+];
+
 const FOOD_COLORS = [
   '#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6',
   '#EC4899', '#06B6D4', '#14B8A6', '#6366F1', '#F97316'
@@ -96,6 +127,8 @@ const FOOD_GRID_COLS = 50; // 40000 / 800
 
 export class GameRoom extends DurableObject {
   private players: Map<string, PlayerSession> = new Map();
+  private bots: Map<string, BotPlayer> = new Map();
+  private pendingBotRespawns: Array<{ delay: number }> = [];
   private foods: Map<number, FoodPellet> = new Map();
   private foodGrid: Map<number, Set<number>> = new Map();
   private viruses: Map<string, ServerVirus> = new Map();
@@ -202,6 +235,361 @@ export class GameRoom extends DurableObject {
     });
   }
 
+  private balanceRoomPopulation(): void {
+    // Zero idle CPU: Do NOT run bots if zero human WebSocket clients are connected.
+    if (this.players.size === 0) {
+      this.bots.clear();
+      this.pendingBotRespawns = [];
+      return;
+    }
+
+    const currentActiveBots = Array.from(this.bots.values()).filter(
+      (b) => !b.isDead && b.cells.length > 0
+    );
+    const totalParticipants = this.players.size + currentActiveBots.length;
+
+    if (totalParticipants < TARGET_ROOM_POPULATION) {
+      const needed = TARGET_ROOM_POPULATION - totalParticipants - this.pendingBotRespawns.length;
+      for (let i = 0; i < needed; i++) {
+        this.spawnBot();
+      }
+    } else if (totalParticipants > TARGET_ROOM_POPULATION) {
+      // Remove excess bots (e.g. when human players join)
+      let excess = totalParticipants - TARGET_ROOM_POPULATION;
+      while (excess > 0 && this.pendingBotRespawns.length > 0) {
+        this.pendingBotRespawns.pop();
+        excess--;
+      }
+      if (excess > 0) {
+        currentActiveBots.sort((a, b) => {
+          const massA = a.cells.reduce((s, c) => s + c.mass, 0);
+          const massB = b.cells.reduce((s, c) => s + c.mass, 0);
+          return massA - massB;
+        });
+        for (let i = 0; i < excess && i < currentActiveBots.length; i++) {
+          this.bots.delete(currentActiveBots[i].id);
+        }
+      }
+    }
+  }
+
+  private spawnBot(): void {
+    if (this.players.size === 0) return;
+    if (this.players.size + this.bots.size >= TARGET_ROOM_POPULATION) return;
+
+    const botId = 'b_' + Math.random().toString(36).substring(2, 9);
+    const spawnX = Math.round(Math.random() * (MAP_SIZE - 2000) + 1000);
+    const spawnY = Math.round(Math.random() * (MAP_SIZE - 2000) + 1000);
+
+    const randArchetype = Math.random();
+    let archetype: BotArchetype = 'NOOB';
+    if (randArchetype < 0.40) {
+      archetype = 'NOOB';
+    } else if (randArchetype < 0.80) {
+      archetype = 'HUNTER';
+    } else {
+      archetype = 'FARMER';
+    }
+
+    const name = BRAIN_ROT_NAMES[Math.floor(Math.random() * BRAIN_ROT_NAMES.length)];
+    const color = BOT_COLORS[Math.floor(Math.random() * BOT_COLORS.length)];
+    // Fresh initial mass: 16–24
+    const initialMass = Math.floor(Math.random() * 9) + 16;
+
+    const firstCell: ServerCell = {
+      id: 'c_' + Math.random().toString(36).substring(2, 9),
+      x: spawnX,
+      y: spawnY,
+      mass: initialMass,
+      vx: 0,
+      vy: 0,
+      boostVx: 0,
+      boostVy: 0,
+      recombineTimer: 0
+    };
+
+    const bot: BotPlayer = {
+      id: botId,
+      name,
+      color,
+      archetype,
+      targetX: spawnX,
+      targetY: spawnY,
+      cells: [firstCell],
+      isDead: false,
+      lastSplitTime: 0,
+      wanderAngle: Math.random() * Math.PI * 2
+    };
+
+    this.bots.set(botId, bot);
+  }
+
+  private onBotDeath(botId: string): void {
+    const bot = this.bots.get(botId);
+    if (bot) {
+      bot.isDead = true;
+      bot.cells = [];
+      this.bots.delete(botId);
+    }
+    const currentActive = this.players.size + this.bots.size + this.pendingBotRespawns.length;
+    if (this.players.size > 0 && currentActive < TARGET_ROOM_POPULATION) {
+      this.pendingBotRespawns.push({ delay: 3.0 });
+    }
+  }
+
+  private seekFood(
+    cell: ServerCell,
+    gridRadius: number,
+    onDirection: (dx: number, dy: number) => void
+  ): boolean {
+    const col = Math.min(FOOD_GRID_COLS - 1, Math.max(0, Math.floor(cell.x / FOOD_GRID_CELL_SIZE)));
+    const row = Math.min(FOOD_GRID_COLS - 1, Math.max(0, Math.floor(cell.y / FOOD_GRID_CELL_SIZE)));
+
+    let closestFood: FoodPellet | null = null;
+    let closestDistSq = Infinity;
+
+    const minC = Math.max(0, col - gridRadius);
+    const maxC = Math.min(FOOD_GRID_COLS - 1, col + gridRadius);
+    const minR = Math.max(0, row - gridRadius);
+    const maxR = Math.min(FOOD_GRID_COLS - 1, row + gridRadius);
+
+    for (let r = minR; r <= maxR; r++) {
+      for (let c = minC; c <= maxC; c++) {
+        const key = r * FOOD_GRID_COLS + c;
+        const bucket = this.foodGrid.get(key);
+        if (!bucket) continue;
+
+        for (const foodId of bucket) {
+          const food = this.foods.get(foodId);
+          if (!food) continue;
+          const dx = food.x - cell.x;
+          const dy = food.y - cell.y;
+          const dSq = dx * dx + dy * dy;
+          if (dSq < closestDistSq) {
+            closestDistSq = dSq;
+            closestFood = food;
+          }
+        }
+      }
+    }
+
+    if (closestFood) {
+      const d = Math.sqrt(closestDistSq) || 1;
+      onDirection((closestFood.x - cell.x) / d, (closestFood.y - cell.y) / d);
+      return true;
+    }
+    return false;
+  }
+
+  private updateBots(dt: number): void {
+    if (this.players.size === 0 || this.bots.size === 0) return;
+    const now = Date.now();
+
+    // Fast snapshot of all living participant cells for spatial queries
+    const allLivingCells: Array<{ cell: ServerCell; ownerId: string; isBot: boolean }> = [];
+    for (const p of this.players.values()) {
+      if (!p.isDead) {
+        for (const c of p.cells) {
+          allLivingCells.push({ cell: c, ownerId: p.id, isBot: false });
+        }
+      }
+    }
+    for (const b of this.bots.values()) {
+      if (!b.isDead) {
+        for (const c of b.cells) {
+          allLivingCells.push({ cell: c, ownerId: b.id, isBot: true });
+        }
+      }
+    }
+
+    for (const bot of this.bots.values()) {
+      if (bot.isDead || bot.cells.length === 0) continue;
+
+      // Primary cell is the largest cell in cluster
+      let mainCell = bot.cells[0];
+      for (let i = 1; i < bot.cells.length; i++) {
+        if (bot.cells[i].mass > mainCell.mass) {
+          mainCell = bot.cells[i];
+        }
+      }
+
+      const botMass = mainCell.mass;
+      const botX = mainCell.x;
+      const botY = mainCell.y;
+
+      let steerX = 0;
+      let steerY = 0;
+      let isFleeing = false;
+
+      // 1. Threat Awareness (All Archetypes)
+      // Flees if a cell with mass > botMass * 1.15 comes within detection radius (450px, or 550px for Farmer)
+      const fleeRange = bot.archetype === 'FARMER' ? 550 : 450;
+      let closestPredatorDist = Infinity;
+      let predatorDx = 0;
+      let predatorDy = 0;
+
+      for (const other of allLivingCells) {
+        if (other.ownerId === bot.id) continue;
+        const oc = other.cell;
+        if (oc.mass > botMass * 1.15) {
+          const d = Math.hypot(oc.x - botX, oc.y - botY);
+          if (d < fleeRange && d < closestPredatorDist) {
+            closestPredatorDist = d;
+            predatorDx = oc.x - botX;
+            predatorDy = oc.y - botY;
+          }
+        }
+      }
+
+      if (closestPredatorDist < fleeRange && closestPredatorDist > 0) {
+        isFleeing = true;
+        const fleeWeight = bot.archetype === 'FARMER' ? 3.0 : 2.2;
+        steerX -= (predatorDx / closestPredatorDist) * fleeWeight;
+        steerY -= (predatorDy / closestPredatorDist) * fleeWeight;
+      }
+
+      // 2. Virus & Threat Awareness (All Archetypes)
+      // "If a bot cell has mass > 130, apply a repulsion vector away from viruses within a 350px detection radius.
+      // If a bot cell has mass < 100, it may treat nearby viruses as neutral/safe space."
+      const wantsToPopVirus = bot.archetype === 'FARMER' && botMass >= 132 && !isFleeing;
+
+      if (botMass > 130 && !wantsToPopVirus) {
+        for (const v of this.viruses.values()) {
+          const vd = Math.hypot(v.x - botX, v.y - botY);
+          if (vd < 350 && vd > 0) {
+            const repulsion = ((350 - vd) / 350) * 2.5;
+            steerX -= ((v.x - botX) / vd) * repulsion;
+            steerY -= ((v.y - botY) / vd) * repulsion;
+          }
+        }
+      }
+
+      // 3. Archetype-Specific Positive Behavior (if not fleeing from immediate predators)
+      if (!isFleeing) {
+        if (bot.archetype === 'HUNTER') {
+          // Targets cells smaller than itself (mass < botMass * 0.85) within 600px radius
+          let targetPrey: ServerCell | null = null;
+          let bestPreyDist = 600;
+
+          for (const other of allLivingCells) {
+            if (other.ownerId === bot.id) continue;
+            const oc = other.cell;
+            if (oc.mass < botMass * 0.85) {
+              const d = Math.hypot(oc.x - botX, oc.y - botY);
+              if (d < bestPreyDist) {
+                bestPreyDist = d;
+                targetPrey = oc;
+              }
+            }
+          }
+
+          if (targetPrey) {
+            steerX += ((targetPrey.x - botX) / bestPreyDist) * 2.0;
+            steerY += ((targetPrey.y - botY) / bestPreyDist) * 2.0;
+
+            // Splits (Space) toward target if within launch range (~180-460px) and botMass > targetMass * 1.3
+            if (
+              now - bot.lastSplitTime > 3000 &&
+              bestPreyDist >= 180 &&
+              bestPreyDist <= 460 &&
+              botMass > targetPrey.mass * 1.3 &&
+              mainCell.mass >= MIN_SPLIT_MASS &&
+              bot.cells.length < MAX_CELLS_PER_PLAYER
+            ) {
+              bot.targetX = targetPrey.x;
+              bot.targetY = targetPrey.y;
+              this.handleSplit(bot);
+              bot.lastSplitTime = now;
+            }
+          } else {
+            // Seek food pellets to grow
+            this.seekFood(mainCell, 3, (fx, fy) => {
+              steerX += fx;
+              steerY += fy;
+            });
+          }
+        } else if (bot.archetype === 'FARMER') {
+          // Prioritizes eating ejected mass and viruses if large enough
+          let foundFarmerTarget = false;
+
+          // Target viruses if large enough (mass >= 132)
+          if (botMass >= 132) {
+            let closestVirus: ServerVirus | null = null;
+            let closestVd = 700;
+            for (const v of this.viruses.values()) {
+              const vd = Math.hypot(v.x - botX, v.y - botY);
+              if (vd < closestVd) {
+                closestVd = vd;
+                closestVirus = v;
+              }
+            }
+            if (closestVirus) {
+              steerX += ((closestVirus.x - botX) / closestVd) * 2.0;
+              steerY += ((closestVirus.y - botY) / closestVd) * 2.0;
+              foundFarmerTarget = true;
+            }
+          }
+
+          // Target nearby ejected mass
+          if (!foundFarmerTarget) {
+            let closestPellet: ServerEjectedPellet | null = null;
+            let closestPd = 600;
+            for (const ep of this.ejectedPellets.values()) {
+              const pd = Math.hypot(ep.x - botX, ep.y - botY);
+              if (pd < closestPd) {
+                closestPd = pd;
+                closestPellet = ep;
+              }
+            }
+            if (closestPellet) {
+              steerX += ((closestPellet.x - botX) / closestPd) * 1.8;
+              steerY += ((closestPellet.y - botY) / closestPd) * 1.8;
+              foundFarmerTarget = true;
+            }
+          }
+
+          // Farm food pellets
+          if (!foundFarmerTarget) {
+            this.seekFood(mainCell, 3, (fx, fy) => {
+              steerX += fx;
+              steerY += fy;
+            });
+          }
+        } else {
+          // NOOB / PASSIVE (40%)
+          // Moves toward nearest food, never splits or ejects, wanders aimlessly if none nearby
+          const found = this.seekFood(mainCell, 3, (fx, fy) => {
+            steerX += fx;
+            steerY += fy;
+          });
+          if (!found) {
+            bot.wanderAngle += (Math.random() - 0.5) * 0.5;
+            steerX += Math.cos(bot.wanderAngle);
+            steerY += Math.sin(bot.wanderAngle);
+          }
+        }
+      }
+
+      // 4. Boundary avoidance
+      const boundMargin = 800;
+      if (botX < boundMargin) steerX += ((boundMargin - botX) / boundMargin) * 2.5;
+      if (botX > MAP_SIZE - boundMargin) steerX -= ((botX - (MAP_SIZE - boundMargin)) / boundMargin) * 2.5;
+      if (botY < boundMargin) steerY += ((boundMargin - botY) / boundMargin) * 2.5;
+      if (botY > MAP_SIZE - boundMargin) steerY -= ((botY - (MAP_SIZE - boundMargin)) / boundMargin) * 2.5;
+
+      // 5. Apply Heading
+      const mag = Math.hypot(steerX, steerY);
+      if (mag > 0.001) {
+        bot.targetX = Math.round(botX + (steerX / mag) * 500);
+        bot.targetY = Math.round(botY + (steerY / mag) * 500);
+      } else {
+        bot.wanderAngle += (Math.random() - 0.5) * 0.3;
+        bot.targetX = Math.round(botX + Math.cos(bot.wanderAngle) * 500);
+        bot.targetY = Math.round(botY + Math.sin(bot.wanderAngle) * 500);
+      }
+    }
+  }
+
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
@@ -216,6 +604,8 @@ export class GameRoom extends DurableObject {
           foodCount: this.foods.size,
           virusCount: this.viruses.size,
           connectedPlayers: this.players.size,
+          botCount: this.bots.size,
+          totalParticipants: this.players.size + this.bots.size,
           maxPlayers: MAX_PLAYERS,
           protocol: 'Splitr-WebSocket-v1'
         }),
@@ -270,6 +660,7 @@ export class GameRoom extends DurableObject {
     };
 
     this.players.set(playerId, session);
+    this.balanceRoomPopulation();
 
     // Send full initial state: map size, player id, all food pellets, viruses, ejected pellets, existing players
     try {
@@ -298,10 +689,16 @@ export class GameRoom extends DurableObject {
     const cleanup = () => {
       if (this.players.has(playerId)) {
         this.players.delete(playerId);
-        this.broadcastState([], []);
-        if (this.players.size === 0 && this.tickInterval) {
-          clearInterval(this.tickInterval);
-          this.tickInterval = null;
+        if (this.players.size === 0) {
+          this.bots.clear();
+          this.pendingBotRespawns = [];
+          if (this.tickInterval) {
+            clearInterval(this.tickInterval);
+            this.tickInterval = null;
+          }
+        } else {
+          this.balanceRoomPopulation();
+          this.broadcastState([], []);
         }
       }
     };
@@ -316,7 +713,18 @@ export class GameRoom extends DurableObject {
   }
 
   private serializePlayers() {
-    return Array.from(this.players.values())
+    const allParticipants: Array<{
+      id: string;
+      name: string;
+      color: string;
+      cells: ServerCell[];
+      isDead: boolean;
+    }> = [
+      ...Array.from(this.players.values()),
+      ...Array.from(this.bots.values())
+    ];
+
+    return allParticipants
       .filter((p) => !p.isDead && p.cells.length > 0)
       .map((p) => ({
         id: p.id,
@@ -443,7 +851,7 @@ export class GameRoom extends DurableObject {
     } catch (_) {}
   }
 
-  private handleSplit(session: PlayerSession): void {
+  private handleSplit(session: { cells: ServerCell[]; isDead: boolean; targetX: number; targetY: number }): void {
     if (session.isDead || session.cells.length === 0) return;
     if (session.cells.length >= MAX_CELLS_PER_PLAYER) return;
 
@@ -530,7 +938,7 @@ export class GameRoom extends DurableObject {
     }
   }
 
-  private popCellOnVirus(session: PlayerSession, cell: ServerCell): void {
+  private popCellOnVirus(session: { cells: ServerCell[] }, cell: ServerCell): void {
     const availableSlots = MAX_CELLS_PER_PLAYER - session.cells.length;
     if (availableSlots <= 0) return;
 
@@ -575,6 +983,8 @@ export class GameRoom extends DurableObject {
 
   private tick(): void {
     if (this.players.size === 0) {
+      this.bots.clear();
+      this.pendingBotRespawns = [];
       if (this.tickInterval) {
         clearInterval(this.tickInterval);
         this.tickInterval = null;
@@ -595,8 +1005,37 @@ export class GameRoom extends DurableObject {
       }
     }
 
+    // Process queued bot respawns (3-second delay, fresh mass 16–24)
+    for (let i = this.pendingBotRespawns.length - 1; i >= 0; i--) {
+      this.pendingBotRespawns[i].delay -= dt;
+      if (this.pendingBotRespawns[i].delay <= 0) {
+        this.pendingBotRespawns.splice(i, 1);
+        if (this.players.size > 0 && this.players.size + this.bots.size < TARGET_ROOM_POPULATION) {
+          this.spawnBot();
+        }
+      }
+    }
+
+    // Update AI Bot behaviors before physics
+    this.updateBots(dt);
+
+    // Unified list of all active human and bot participants
+    const allParticipants: Array<{
+      id: string;
+      name: string;
+      color: string;
+      targetX: number;
+      targetY: number;
+      cells: ServerCell[];
+      isDead: boolean;
+      ws?: WebSocket;
+    }> = [
+      ...Array.from(this.players.values()),
+      ...Array.from(this.bots.values())
+    ];
+
     // 1. Move cells, decay boost impulse velocities, count down recombine timers
-    for (const session of this.players.values()) {
+    for (const session of allParticipants) {
       if (session.isDead || session.cells.length === 0) continue;
 
       for (const cell of session.cells) {
@@ -670,7 +1109,7 @@ export class GameRoom extends DurableObject {
       pellet.y = Math.max(10, Math.min(MAP_SIZE - 10, pellet.y));
     }
 
-    // 4. Ejected pellet feeding viruses and player consumption
+    // 4. Ejected pellet feeding viruses and participant consumption
     for (const [pelletId, pellet] of this.ejectedPellets.entries()) {
       let pelletConsumed = false;
 
@@ -708,10 +1147,10 @@ export class GameRoom extends DurableObject {
 
       if (pelletConsumed) continue;
 
-      // Player re-consumption after 0.5s spawn invulnerability
+      // Participant re-consumption after 0.5s spawn invulnerability
       const ageSec = (now - pellet.createdAt) / 1000;
       if (ageSec >= 0.5) {
-        for (const session of this.players.values()) {
+        for (const session of allParticipants) {
           if (session.isDead || session.cells.length === 0) continue;
           for (const cell of session.cells) {
             const cr = Math.sqrt(cell.mass * 100);
@@ -729,7 +1168,7 @@ export class GameRoom extends DurableObject {
     }
 
     // 5. Sibling cell interaction: Rigid Sibling Separation & Recombining
-    for (const session of this.players.values()) {
+    for (const session of allParticipants) {
       if (session.isDead || session.cells.length < 2) continue;
       const cells = session.cells;
 
@@ -778,8 +1217,8 @@ export class GameRoom extends DurableObject {
               if (normalVel < 0) {
                 c1.vx += normalX * normalVel * 0.5;
                 c1.vy += normalY * normalVel * 0.5;
-                c2.vx -= normalX * normalVel * 0.5;
-                c2.vy -= normalY * normalVel * 0.5;
+                c2.vx += normalX * normalVel * 0.5;
+                c2.vy += normalY * normalVel * 0.5;
               }
 
               c1.x = Math.max(r1, Math.min(MAP_SIZE - r1, c1.x));
@@ -796,7 +1235,7 @@ export class GameRoom extends DurableObject {
     const eatenFoodIds: number[] = [];
     const newFoods: FoodPellet[] = [];
 
-    for (const session of this.players.values()) {
+    for (const session of allParticipants) {
       if (session.isDead || session.cells.length === 0) continue;
 
       for (const cell of session.cells) {
@@ -848,8 +1287,8 @@ export class GameRoom extends DurableObject {
       }
     }
 
-    // 7. Player-Virus Collisions (Server-Authoritative)
-    for (const session of this.players.values()) {
+    // 7. Participant-Virus Collisions (Server-Authoritative)
+    for (const session of allParticipants) {
       if (session.isDead || session.cells.length === 0) continue;
 
       for (let ci = session.cells.length - 1; ci >= 0; ci--) {
@@ -883,8 +1322,8 @@ export class GameRoom extends DurableObject {
       }
     }
 
-    // 8. Server-Authoritative Player-vs-Player (PvP) Consumption
-    const activeSessions = Array.from(this.players.values()).filter(
+    // 8. Server-Authoritative PvP / Bot Consumption
+    const activeSessions = allParticipants.filter(
       (p) => !p.isDead && p.cells.length > 0
     );
 
@@ -915,17 +1354,21 @@ export class GameRoom extends DurableObject {
                 c1.mass += c2.mass;
                 p2.cells.splice(cj, 1);
 
-                // If all cells for player 2 are eaten, trigger game-over packet
+                // If all cells for player/bot 2 are eaten
                 if (p2.cells.length === 0) {
                   p2.isDead = true;
-                  try {
-                    p2.ws.send(
-                      JSON.stringify({
-                        type: 'gameOver',
-                        killerName: p1.name || 'Player'
-                      })
-                    );
-                  } catch (_) {}
+                  if (p2.ws) {
+                    try {
+                      p2.ws.send(
+                        JSON.stringify({
+                          type: 'gameOver',
+                          killerName: p1.name || 'Player'
+                        })
+                      );
+                    } catch (_) {}
+                  } else {
+                    this.onBotDeath(p2.id);
+                  }
                 }
                 break;
               }
@@ -947,6 +1390,13 @@ export class GameRoom extends DurableObject {
             }
           }
         }
+      }
+    }
+
+    // Cleanup any dead bots that lost all cells
+    for (const [botId, bot] of this.bots.entries()) {
+      if (!bot.isDead && bot.cells.length === 0) {
+        this.onBotDeath(botId);
       }
     }
 
