@@ -57,10 +57,15 @@ interface FoodPellet {
   x: number;
   y: number;
   color: string;
+  mass: number;
+  radius: number;
+  isSuper?: boolean;
 }
 
 const MAP_SIZE = 40000;
-const FOOD_COUNT = 4800;
+const FOOD_COUNT = 9600; // Sufficient pellets to populate the 40,000x40,000 arena
+const FOOD_MASS = 2; // Standardized food pellet mass value
+const SUPER_FOOD_MASS = 10; // Standardized super food pellet mass value
 const BASE_PLAYER_MASS = 50;
 const MAX_PLAYERS = 64;
 const MAX_CELLS_PER_PLAYER = 16;
@@ -86,9 +91,13 @@ const FOOD_COLORS = [
   '#EC4899', '#06B6D4', '#14B8A6', '#6366F1', '#F97316'
 ];
 
+const FOOD_GRID_CELL_SIZE = 800;
+const FOOD_GRID_COLS = 50; // 40000 / 800
+
 export class GameRoom extends DurableObject {
   private players: Map<string, PlayerSession> = new Map();
   private foods: Map<number, FoodPellet> = new Map();
+  private foodGrid: Map<number, Set<number>> = new Map();
   private viruses: Map<string, ServerVirus> = new Map();
   private ejectedPellets: Map<string, ServerEjectedPellet> = new Map();
   private pendingVirusRespawns: Array<{ id: string; delay: number }> = [];
@@ -101,15 +110,46 @@ export class GameRoom extends DurableObject {
     this.initViruses();
   }
 
+  private getGridKey(x: number, y: number): number {
+    const col = Math.min(FOOD_GRID_COLS - 1, Math.max(0, Math.floor(x / FOOD_GRID_CELL_SIZE)));
+    const row = Math.min(FOOD_GRID_COLS - 1, Math.max(0, Math.floor(y / FOOD_GRID_CELL_SIZE)));
+    return row * FOOD_GRID_COLS + col;
+  }
+
+  private addFoodToGrid(food: FoodPellet): void {
+    const key = this.getGridKey(food.x, food.y);
+    let bucket = this.foodGrid.get(key);
+    if (!bucket) {
+      bucket = new Set();
+      this.foodGrid.set(key, bucket);
+    }
+    bucket.add(food.id);
+  }
+
+  private removeFoodFromGrid(food: FoodPellet): void {
+    const key = this.getGridKey(food.x, food.y);
+    const bucket = this.foodGrid.get(key);
+    if (bucket) {
+      bucket.delete(food.id);
+    }
+  }
+
   private initFoods(): void {
     this.foods.clear();
+    this.foodGrid.clear();
     for (let i = 1; i <= FOOD_COUNT; i++) {
-      this.foods.set(i, {
+      const isSuper = Math.random() < 0.10;
+      const pellet: FoodPellet = {
         id: i,
         x: Math.round(Math.random() * (MAP_SIZE - 200) + 100),
         y: Math.round(Math.random() * (MAP_SIZE - 200) + 100),
-        color: FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)]
-      });
+        color: isSuper ? '#F59E0B' : FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)],
+        mass: isSuper ? SUPER_FOOD_MASS : FOOD_MASS,
+        radius: isSuper ? 14 : 9.5,
+        isSuper
+      };
+      this.foods.set(i, pellet);
+      this.addFoodToGrid(pellet);
     }
     this.nextFoodId = FOOD_COUNT + 1;
   }
@@ -582,7 +622,7 @@ export class GameRoom extends DurableObject {
         const dy = session.targetY - cell.y;
         const dist = Math.hypot(dx, dy);
         if (dist > 5) {
-          const speed = Math.max(75, 1180 / Math.pow(cell.mass, 0.40));
+          const speed = Math.max(70, 1450 / Math.pow(Math.max(1, cell.mass), 0.42));
           const targetVx = (dx / dist) * speed;
           const targetVy = (dy / dist) * speed;
           const lerpRate = Math.min(1, dt * 5.0);
@@ -763,26 +803,46 @@ export class GameRoom extends DurableObject {
         const cellRadius = Math.sqrt(cell.mass * 100);
         const cellRadiusSq = cellRadius * cellRadius;
 
-        for (const [foodId, food] of this.foods.entries()) {
-          if (!this.foods.has(foodId)) continue;
-          const dx = cell.x - food.x;
-          const dy = cell.y - food.y;
-          if (dx * dx + dy * dy < cellRadiusSq) {
-            this.foods.delete(foodId);
-            eatenFoodIds.push(foodId);
-            cell.mass += 1;
+        const minCol = Math.max(0, Math.floor((cell.x - cellRadius) / FOOD_GRID_CELL_SIZE));
+        const maxCol = Math.min(FOOD_GRID_COLS - 1, Math.floor((cell.x + cellRadius) / FOOD_GRID_CELL_SIZE));
+        const minRow = Math.max(0, Math.floor((cell.y - cellRadius) / FOOD_GRID_CELL_SIZE));
+        const maxRow = Math.min(FOOD_GRID_COLS - 1, Math.floor((cell.y + cellRadius) / FOOD_GRID_CELL_SIZE));
 
-            // Respawn new food pellet at random position
-            const newId = this.nextFoodId++;
-            if (this.nextFoodId > 1000000000) this.nextFoodId = 1;
-            const newFood: FoodPellet = {
-              id: newId,
-              x: Math.round(Math.random() * (MAP_SIZE - 120) + 60),
-              y: Math.round(Math.random() * (MAP_SIZE - 120) + 60),
-              color: FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)]
-            };
-            this.foods.set(newId, newFood);
-            newFoods.push(newFood);
+        for (let r = minRow; r <= maxRow; r++) {
+          for (let c = minCol; c <= maxCol; c++) {
+            const bucketKey = r * FOOD_GRID_COLS + c;
+            const bucket = this.foodGrid.get(bucketKey);
+            if (!bucket) continue;
+
+            for (const foodId of Array.from(bucket)) {
+              const food = this.foods.get(foodId);
+              if (!food) continue;
+              const dx = cell.x - food.x;
+              const dy = cell.y - food.y;
+              if (dx * dx + dy * dy < cellRadiusSq) {
+                this.removeFoodFromGrid(food);
+                this.foods.delete(foodId);
+                eatenFoodIds.push(foodId);
+                cell.mass += food.mass || FOOD_MASS;
+
+                // Respawn new food pellet at random position
+                const newId = this.nextFoodId++;
+                if (this.nextFoodId > 1000000000) this.nextFoodId = 1;
+                const isSuper = Math.random() < 0.10;
+                const newFood: FoodPellet = {
+                  id: newId,
+                  x: Math.round(Math.random() * (MAP_SIZE - 120) + 60),
+                  y: Math.round(Math.random() * (MAP_SIZE - 120) + 60),
+                  color: isSuper ? '#F59E0B' : FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)],
+                  mass: isSuper ? SUPER_FOOD_MASS : FOOD_MASS,
+                  radius: isSuper ? 14 : 9.5,
+                  isSuper
+                };
+                this.foods.set(newId, newFood);
+                this.addFoodToGrid(newFood);
+                newFoods.push(newFood);
+              }
+            }
           }
         }
       }

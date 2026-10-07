@@ -35,10 +35,10 @@ export function getRandomPaletteColor() {
   // --- ARENA TUNING (Conforms to PHYSICS_SPEC.md) ---
   const MAP_SIZE = 10000;
   const GRID_SIZE = 60;
-  const FOOD_COUNT = 4200;
+  const FOOD_COUNT = 4800;
   const VIRUS_COUNT = 38;
-  const FOOD_MASS = 3;
-  const SUPER_FOOD_MASS = 12;
+  const FOOD_MASS = 2;
+  const SUPER_FOOD_MASS = 10;
 
   // Mass pellets: 15 mass points for each ejected mass pellet
   const EJECT_MASS = 15;
@@ -58,18 +58,18 @@ export function getRandomPaletteColor() {
 
   // Smooth Speed Curve - Snappy and faster for smaller cells
   function massToSpeed(m) {
-    const baseSpeed = 1180;
-    const exponent = 0.40;
-    const minimumSpeed = 75;
+    const baseSpeed = 1450;
+    const exponent = 0.42;
+    const minimumSpeed = 70;
     return Math.max(
       minimumSpeed,
       baseSpeed / Math.pow(Math.max(1, m), exponent)
     );
   }
 
-  // Recombine Cooldown: t = 12 + 0.018 * mass (seconds)
+  // Recombine Cooldown: Sigmally / Competitive conforming
   function calcRecombineTime(m) {
-    return Math.max(8, 12 + 0.018 * m);
+    return Math.min(45, Math.max(18, 18 + m * 0.015));
   }
 
   // Unambiguous Room Code Generator (no confusing characters: 0, 1, O, I removed)
@@ -227,7 +227,7 @@ export function getRandomPaletteColor() {
       if (Math.abs(this.boostVx) > 2 || Math.abs(this.boostVy) > 2) {
         this.x += this.boostVx * dt;
         this.y += this.boostVy * dt;
-        const decay = Math.exp(-2.8 * dt);
+        const decay = Math.exp(-3.5 * dt);
         this.boostVx *= decay;
         this.boostVy *= decay;
       } else {
@@ -1087,7 +1087,7 @@ export function getRandomPaletteColor() {
 
       if (this.chatMessages) {
         const el = document.createElement('div');
-        el.className = 'bg-white/95 dark:bg-[#161720]/95 border border-[#111111] dark:border-zinc-700 px-2.5 py-1 rounded text-xs text-[#111111] dark:text-[#F3F4F6] shadow-sm';
+        el.className = 'bg-white/95 dark:bg-[#141414]/95 border border-[#111111] dark:border-[#262626] px-2.5 py-1 rounded text-xs text-[#111111] dark:text-white shadow-sm';
         el.innerHTML = `<span class="font-serif font-bold text-[#111111] dark:text-white">${escapeHtml(item.sender)}:</span> <span>${escapeHtml(item.text)}</span>`;
         this.chatMessages.appendChild(el);
         this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
@@ -1463,14 +1463,14 @@ export function getRandomPaletteColor() {
           rp = {
             id: sp.id,
             name: sp.name || 'Player',
-            color: sp.color || '#64748B',
+            color: sp.color || '#737373',
             totalMass: sp.totalMass || 25,
             cells: new Map()
           };
           this.onlineRemotePlayers.set(sp.id, rp);
         } else {
           rp.name = sp.name || 'Player';
-          rp.color = sp.color || '#64748B';
+          rp.color = sp.color || '#737373';
           rp.totalMass = sp.totalMass || 25;
         }
 
@@ -2280,7 +2280,7 @@ export function getRandomPaletteColor() {
       const targetY = isLocal ? this.mouseWorldY : (p.targetY !== undefined ? p.targetY : this.mouseWorldY);
 
       for (const cell of p.cells) {
-        if (cell.mass > BASE_PLAYER_MASS + EJECT_LOSS) {
+        if (cell.mass >= 32) {
           cell.mass -= EJECT_LOSS;
           cell.radius = massToRadius(cell.mass);
 
@@ -3142,7 +3142,7 @@ export function getRandomPaletteColor() {
             y: c.y,
             mass: c.mass,
             radius: c.radius || Math.sqrt(c.mass * 100),
-            color: p.color || '#64748B',
+            color: p.color || '#737373',
             name: p.name || 'Player',
             squish: c.squish || 1.0,
             squishAngle: c.squishAngle || 0
@@ -3256,13 +3256,13 @@ export function getRandomPaletteColor() {
         }
 
         // In-cell names & mass scaling smoothly with cell size
-        if (c.radius >= 18) {
-          let fontSize = Math.max(10, Math.min(c.radius * 0.32, 140));
+        if (c.radius >= 12) {
+          let fontSize = Math.max(9, Math.min(Math.round(c.radius * 0.35), 320));
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
           ctx.font = `700 ${fontSize}px ${fontFam}`;
-          const maxTextW = c.radius * 1.65;
+          const maxTextW = c.radius * 1.68;
           let textW = ctx.measureText(c.name).width;
 
           // Scale font size down smoothly if name exceeds in-cell boundaries
@@ -3271,12 +3271,12 @@ export function getRandomPaletteColor() {
             ctx.font = `700 ${fontSize}px ${fontFam}`;
           }
 
-          if (fontSize >= 9) {
+          if (fontSize >= 8) {
             ctx.lineWidth = Math.max(2, fontSize * 0.16);
             ctx.strokeStyle = '#000000';
             ctx.fillStyle = '#FFFFFF';
 
-            if (this.showMass && c.radius >= 24) {
+            if (this.showMass && c.radius >= 22) {
               const massFontSize = Math.max(8, Math.floor(fontSize * 0.65));
               ctx.strokeText(c.name, 0, -fontSize * 0.28);
               ctx.fillText(c.name, 0, -fontSize * 0.28);
@@ -3334,7 +3334,7 @@ export function getRandomPaletteColor() {
 
     drawBoundaries(ctx) {
       const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 40000) : MAP_SIZE;
-      ctx.strokeStyle = this.isDarkMode ? '#F3F4F6' : '#111111';
+      ctx.strokeStyle = this.isDarkMode ? '#FFFFFF' : '#111111';
       ctx.lineWidth = 8;
       ctx.strokeRect(0, 0, currentMapSize, currentMapSize);
     }
@@ -3506,8 +3506,8 @@ export function getRandomPaletteColor() {
           ctx.stroke();
         }
 
-        if (c.radius > 16) {
-          let fontSize = Math.max(10, Math.min(c.radius * 0.32, 140));
+        if (c.radius >= 12) {
+          let fontSize = Math.max(9, Math.min(Math.round(c.radius * 0.35), 320));
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
@@ -3516,7 +3516,7 @@ export function getRandomPaletteColor() {
           const strokeColor = isDarkCell ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)';
 
           ctx.font = `700 ${fontSize}px ${fontFam}`;
-          const maxTextW = c.radius * 1.65;
+          const maxTextW = c.radius * 1.68;
           let textW = ctx.measureText(c.name).width;
           if (textW > maxTextW) {
             fontSize = Math.max(8, Math.floor(fontSize * (maxTextW / textW)));
@@ -3526,12 +3526,13 @@ export function getRandomPaletteColor() {
           ctx.strokeStyle = strokeColor;
           ctx.fillStyle = textColor;
 
-          if (this.showMass) {
+          if (this.showMass && c.radius >= 22) {
+            const massFontSize = Math.max(8, Math.floor(fontSize * 0.65));
             ctx.strokeText(c.name, 0, -fontSize * 0.28);
             ctx.fillText(c.name, 0, -fontSize * 0.28);
 
-            ctx.font = `700 ${Math.floor(fontSize * 0.68)}px ${fontFam}`;
-            ctx.lineWidth = Math.max(2, fontSize * 0.14);
+            ctx.font = `700 ${massFontSize}px ${fontFam}`;
+            ctx.lineWidth = Math.max(2, massFontSize * 0.14);
             ctx.strokeText(Math.round(c.mass), 0, fontSize * 0.65);
             ctx.fillText(Math.round(c.mass), 0, fontSize * 0.65);
           } else {
@@ -3624,10 +3625,10 @@ export function getRandomPaletteColor() {
       const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 40000) : MAP_SIZE;
       const scale = w / currentMapSize;
 
-      mCtx.fillStyle = this.isDarkMode ? '#12131A' : '#FFFFFF';
+      mCtx.fillStyle = this.isDarkMode ? '#121212' : '#FFFFFF';
       mCtx.fillRect(0, 0, w, h);
 
-      mCtx.strokeStyle = this.isDarkMode ? '#2E303D' : '#111111';
+      mCtx.strokeStyle = this.isDarkMode ? '#282828' : '#111111';
       mCtx.lineWidth = 1;
       mCtx.strokeRect(0, 0, w, h);
 
@@ -3638,13 +3639,13 @@ export function getRandomPaletteColor() {
       const camBoxW = Math.min(w - camMinX, camHalfW * 2);
       const camBoxH = Math.min(h - camMinY, camHalfH * 2);
 
-      mCtx.strokeStyle = this.isDarkMode ? 'rgba(255, 255, 255, 0.4)' : 'rgba(17, 17, 17, 0.35)';
+      mCtx.strokeStyle = this.isDarkMode ? 'rgba(255, 255, 255, 0.45)' : 'rgba(17, 17, 17, 0.35)';
       mCtx.lineWidth = 1;
       mCtx.strokeRect(camMinX, camMinY, camBoxW, camBoxH);
 
       if (this.isOnlineMode) {
-        // Draw online viruses on minimap
-        mCtx.fillStyle = '#10B981';
+        // Draw online viruses on minimap (green dots)
+        mCtx.fillStyle = '#22C55E';
         for (const v of this.onlineViruses.values()) {
           const mx = v.x * scale;
           const my = v.y * scale;
@@ -3654,7 +3655,7 @@ export function getRandomPaletteColor() {
         }
 
         for (const p of this.onlineRemotePlayers.values()) {
-          mCtx.fillStyle = p.color || '#64748B';
+          mCtx.fillStyle = p.color || '#737373';
           if (p.cells) {
             for (const c of p.cells.values()) {
               const mx = c.x * scale;
@@ -3666,7 +3667,7 @@ export function getRandomPaletteColor() {
             }
           }
         }
-        mCtx.fillStyle = this.isDarkMode ? '#10B981' : '#2563EB';
+        mCtx.fillStyle = this.isDarkMode ? '#FFFFFF' : '#111111';
         for (const c of this.onlineLocalCells.values()) {
           const mx = c.x * scale;
           const my = c.y * scale;
@@ -3678,10 +3679,20 @@ export function getRandomPaletteColor() {
         return;
       }
 
+      // Offline mode: Draw viruses on minimap (green dots)
+      mCtx.fillStyle = '#22C55E';
+      for (const v of this.viruses) {
+        const mx = v.x * scale;
+        const my = v.y * scale;
+        mCtx.beginPath();
+        mCtx.arc(mx, my, 2.5, 0, Math.PI * 2);
+        mCtx.fill();
+      }
+
       for (const p of this.players.values()) {
         if (p.cells.length === 0) continue;
         const isLocal = p.id === this.localPlayerId;
-        mCtx.fillStyle = isLocal ? (this.isDarkMode ? '#FFFFFF' : '#111111') : '#64748B';
+        mCtx.fillStyle = isLocal ? (this.isDarkMode ? '#FFFFFF' : '#111111') : '#737373';
 
         for (const c of p.cells) {
           const mx = c.x * scale;
@@ -3698,7 +3709,7 @@ export function getRandomPaletteColor() {
         const c = localPlayer.cells[0];
         const mx = c.x * scale;
         const my = c.y * scale;
-        mCtx.strokeStyle = this.isDarkMode ? '#10B981' : '#111111';
+        mCtx.strokeStyle = this.isDarkMode ? '#FFFFFF' : '#111111';
         mCtx.lineWidth = 1.5;
         mCtx.beginPath();
         mCtx.arc(mx, my, 4.5, 0, Math.PI * 2);
