@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="h-full w-full overflow-hidden select-none bg-[#F7F7F5] dark:bg-[#0E0F14] text-[#111111] dark:text-[#F3F4F6]">
+<html lang="en" class="h-full w-full overflow-hidden select-none bg-[#F7F7F5] dark:bg-[#0A0A0A] text-[#111111] dark:text-[#FFFFFF]">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
@@ -36,7 +36,7 @@
       })();
     </script>
 
-    <!-- Tailwind CSS CDN with dark mode enabled -->
+    <!-- Tailwind CSS CDN with pure neutral dark mode enabled -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
       tailwind.config = {
@@ -54,10 +54,10 @@
               mono: ["'Alice'", 'Georgia', 'serif']
             },
             colors: {
-              darkbg: '#0E0F14',
-              darkcard: '#161720',
-              darkborder: '#272936',
-              darkmuted: '#9CA3AF'
+              darkbg: '#0A0A0A',
+              darkcard: '#141414',
+              darkborder: '#262626',
+              darkmuted: '#A3A3A3'
             }
           }
         }
@@ -84,11 +84,11 @@
         box-shadow: 0 16px 40px rgba(17, 17, 17, 0.06);
       }
 
-      /* Dark Mode Card */
+      /* Pure Neutral Dark Mode Card - No Blue */
       html.dark .editorial-card {
-        background: #15161E;
-        border: 1.5px solid #2B2D3B;
-        box-shadow: 0 20px 48px rgba(0, 0, 0, 0.55);
+        background: #141414;
+        border: 1.5px solid #262626;
+        box-shadow: 0 20px 48px rgba(0, 0, 0, 0.75);
       }
 
       /* Editorial Primary Button */
@@ -98,23 +98,29 @@
         border: 1.5px solid #111111;
         border-radius: 8px;
         font-weight: 600;
-        transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
         cursor: pointer;
       }
       .btn-editorial:hover {
         background-color: #FFFFFF;
         color: #111111;
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12);
+      }
+      .btn-editorial:active {
+        transform: translateY(0px) scale(0.99);
       }
 
       html.dark .btn-editorial {
-        background-color: #F3F4F6;
-        color: #0E0F14;
-        border: 1.5px solid #F3F4F6;
+        background-color: #FFFFFF;
+        color: #0A0A0A;
+        border: 1.5px solid #FFFFFF;
       }
       html.dark .btn-editorial:hover {
-        background-color: #0E0F14;
-        color: #F3F4F6;
-        border-color: #F3F4F6;
+        background-color: #0A0A0A;
+        color: #FFFFFF;
+        border-color: #FFFFFF;
+        box-shadow: 0 4px 16px rgba(255, 255, 255, 0.12);
       }
 
       /* Editorial Secondary Button */
@@ -124,22 +130,26 @@
         border: 1.5px solid #111111;
         border-radius: 8px;
         font-weight: 600;
-        transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+        transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
         cursor: pointer;
       }
       .btn-editorial-secondary:hover {
         background-color: #111111;
         color: #FFFFFF;
+        transform: translateY(-1px);
+      }
+      .btn-editorial-secondary:active {
+        transform: translateY(0px) scale(0.99);
       }
 
       html.dark .btn-editorial-secondary {
-        background-color: #161720;
-        color: #F3F4F6;
-        border: 1.5px solid #2E303D;
+        background-color: #181818;
+        color: #FFFFFF;
+        border: 1.5px solid #2A2A2A;
       }
       html.dark .btn-editorial-secondary:hover {
-        background-color: #242634;
-        border-color: #F3F4F6;
+        background-color: #222222;
+        border-color: #444444;
       }
 
       /* Editorial HUD Panels */
@@ -154,12 +164,12 @@
       }
 
       html.dark .editorial-hud {
-        background: rgba(18, 19, 26, 0.94);
+        background: rgba(18, 18, 18, 0.95);
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
-        border: 1px solid #2E303D;
-        color: #F3F4F6;
-        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+        border: 1px solid #282828;
+        color: #FFFFFF;
+        box-shadow: 0 6px 18px rgba(0, 0, 0, 0.6);
       }
 
       /* Brand Logo */
@@ -170,13 +180,41 @@
         display: block;
       }
 
-      /* Menu Reveal Animation */
+      /* Branded UI Keyframe Animations */
       @keyframes menuReveal {
-        0% { opacity: 0; transform: translateY(8px); }
-        100% { opacity: 1; transform: translateY(0); }
+        0% { opacity: 0; transform: translateY(14px) scale(0.985); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
       }
       .animate-menu-reveal {
-        animation: menuReveal 0.24s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        animation: menuReveal 0.28s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      @keyframes recapPopIn {
+        0% { opacity: 0; transform: translateY(-12px) scale(0.97); }
+        60% { transform: translateY(2px) scale(1.008); }
+        100% { opacity: 1; transform: translateY(0) scale(1); }
+      }
+      .animate-recap-pop {
+        animation: recapPopIn 0.36s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      @keyframes avatarPulse {
+        0%, 100% { transform: scale(1); box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08); }
+        50% { transform: scale(1.04); box-shadow: 0 8px 26px rgba(0, 0, 0, 0.16); }
+      }
+      .animate-avatar-pulse {
+        animation: avatarPulse 3.4s ease-in-out infinite;
+      }
+
+      /* Hover micro-interactions */
+      .btn-hover-lift {
+        transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      .btn-hover-lift:hover {
+        transform: translateY(-2px);
+      }
+      .btn-hover-lift:active {
+        transform: translateY(0px) scale(0.985);
       }
 
       ::-webkit-scrollbar {
@@ -187,7 +225,7 @@
         border-radius: 2px;
       }
       html.dark ::-webkit-scrollbar-thumb {
-        background: #3B3E52;
+        background: #333333;
       }
 
       canvas {
@@ -196,7 +234,7 @@
       }
     </style>
   </head>
-  <body class="h-full w-full overflow-hidden bg-[#F7F7F5] dark:bg-[#0E0F14] text-[#111111] dark:text-[#F3F4F6] relative transition-colors duration-200">
+  <body class="h-full w-full overflow-hidden bg-[#F7F7F5] dark:bg-[#0A0A0A] text-[#111111] dark:text-[#FFFFFF] relative transition-colors duration-200">
     <!-- Game Canvas -->
     <canvas id="gameCanvas" class="absolute inset-0 block w-full h-full cursor-crosshair z-0"></canvas>
 
@@ -236,7 +274,7 @@
           <button id="btnCopyCode" class="px-2 py-0.5 bg-[#111111] dark:bg-white text-white dark:text-[#111111] rounded text-[10px] font-semibold hover:opacity-85 transition-opacity cursor-pointer">
             COPY
           </button>
-          <button id="btnCopyLinkHUD" class="px-2 py-0.5 border border-[#111111] dark:border-zinc-500 bg-white dark:bg-[#161720] hover:bg-[#111111] hover:text-white dark:hover:bg-white dark:hover:text-[#111111] rounded text-[10px] font-semibold transition-colors cursor-pointer">
+          <button id="btnCopyLinkHUD" class="px-2 py-0.5 border border-[#111111] dark:border-zinc-500 bg-white dark:bg-[#181818] hover:bg-[#111111] hover:text-white dark:hover:bg-white dark:hover:text-[#111111] rounded text-[10px] font-semibold transition-colors cursor-pointer">
             LINK
           </button>
         </div>
@@ -254,9 +292,9 @@
     <!-- Top Right Leaderboard HUD -->
     <div id="leaderboardHud" class="absolute top-4 right-4 z-10 hidden pointer-events-none w-56 md:w-60">
       <div class="editorial-hud p-3.5 shadow-md">
-        <div class="flex items-center justify-between pb-2 mb-2 border-b border-[#111111] dark:border-zinc-700 text-[11px] font-bold tracking-wider uppercase">
+        <div class="flex items-center justify-between pb-2 mb-2 border-b border-[#111111] dark:border-[#262626] text-[11px] font-bold tracking-wider uppercase">
           <div class="flex items-center gap-1.5">
-            <span class="font-serif text-sm tracking-normal capitalize font-bold text-[#111111] dark:text-[#F3F4F6]">Leaderboard</span>
+            <span class="font-serif text-sm tracking-normal capitalize font-bold text-[#111111] dark:text-[#FFFFFF]">Leaderboard</span>
             <span id="playerTotalCount" class="text-[10px] text-zinc-500 font-normal">(0)</span>
           </div>
           <button
@@ -298,7 +336,7 @@
 
     <!-- Bottom Left Persistent Chat Input Bar (/ or Enter to chat) -->
     <div class="absolute bottom-3 left-4 z-20 pointer-events-auto">
-      <form id="chatForm" class="hidden flex items-center bg-white/95 dark:bg-[#161720]/95 border border-[#111111] dark:border-zinc-700 backdrop-blur rounded-lg px-3 py-1.5 text-xs shadow-md w-64 md:w-80">
+      <form id="chatForm" class="hidden flex items-center bg-white/95 dark:bg-[#141414]/95 border border-[#111111] dark:border-[#262626] backdrop-blur rounded-lg px-3 py-1.5 text-xs shadow-md w-64 md:w-80">
         <span class="text-[#111111] dark:text-white mr-2 font-bold font-serif text-sm">/</span>
         <input
           id="chatInput"
@@ -317,7 +355,7 @@
           <span class="font-serif text-xs capitalize font-normal">Radar</span>
           <span class="text-zinc-500 dark:text-zinc-400 font-mono">10K</span>
         </div>
-        <div class="relative rounded overflow-hidden border border-[#111111] dark:border-zinc-700 bg-white dark:bg-[#111218]">
+        <div class="relative rounded overflow-hidden border border-[#111111] dark:border-[#262626] bg-white dark:bg-[#101010]">
           <canvas id="minimapCanvas" width="120" height="120" class="block"></canvas>
         </div>
       </div>
@@ -337,10 +375,10 @@
     <!-- ======================================================== -->
     <!-- START SCREEN & LOBBY MENU                                -->
     <!-- ======================================================== -->
-    <div id="lobbyScreen" class="absolute inset-0 z-20 flex flex-col justify-between overflow-y-auto bg-[#F7F7F5]/92 dark:bg-[#0E0F14]/94 backdrop-blur-[12px] transition-all">
+    <div id="lobbyScreen" class="absolute inset-0 z-20 flex flex-col justify-between overflow-y-auto bg-[#F7F7F5]/92 dark:bg-[#0A0A0A]/95 backdrop-blur-[14px] transition-all">
       
       <!-- Top Navigation Bar -->
-      <header class="w-full bg-[#FFFFFF]/90 dark:bg-[#15161E]/90 border-b border-[#111111] dark:border-[#272936] px-5 py-3 flex items-center justify-between text-xs text-[#111111] dark:text-[#F3F4F6] shrink-0">
+      <header class="w-full bg-[#FFFFFF]/90 dark:bg-[#141414]/90 border-b border-[#111111] dark:border-[#262626] px-5 py-3 flex items-center justify-between text-xs text-[#111111] dark:text-[#FFFFFF] shrink-0">
         <!-- Brand Wordmark -->
         <div class="flex items-center gap-3">
           <span class="font-serif text-2xl font-bold tracking-tight text-[#111111] dark:text-white">
@@ -351,22 +389,22 @@
         <!-- Right Quick Actions: Theme, Audio, Records, Help -->
         <div class="flex items-center gap-2">
           <!-- Dark Mode Toggle Button -->
-          <button id="btnHeaderThemeToggle" class="px-3 py-1.5 bg-white dark:bg-[#1D1E29] hover:bg-[#111111] hover:text-white dark:hover:bg-white dark:hover:text-[#111111] text-[#111111] dark:text-white border border-[#111111] dark:border-zinc-600 rounded-lg text-xs font-semibold transition-all cursor-pointer">
+          <button id="btnHeaderThemeToggle" class="px-3 py-1.5 bg-white dark:bg-[#1A1A1A] hover:bg-[#111111] hover:text-white dark:hover:bg-white dark:hover:text-[#111111] text-[#111111] dark:text-white border border-[#111111] dark:border-[#333333] rounded-lg text-xs font-semibold transition-all cursor-pointer btn-hover-lift">
             <span id="headerThemeText">Theme: Dark</span>
           </button>
 
           <!-- Audio Toggle -->
-          <button id="btnHeaderAudioToggle" class="px-3 py-1.5 bg-white dark:bg-[#1D1E29] hover:bg-[#111111] hover:text-white dark:hover:bg-white dark:hover:text-[#111111] text-[#111111] dark:text-white border border-[#111111] dark:border-zinc-600 rounded-lg text-xs font-semibold transition-all cursor-pointer">
+          <button id="btnHeaderAudioToggle" class="px-3 py-1.5 bg-white dark:bg-[#1A1A1A] hover:bg-[#111111] hover:text-white dark:hover:bg-white dark:hover:text-[#111111] text-[#111111] dark:text-white border border-[#111111] dark:border-[#333333] rounded-lg text-xs font-semibold transition-all cursor-pointer btn-hover-lift">
             <span id="headerAudioText">Audio: ON</span>
           </button>
 
           <!-- Career Records Modal Opener -->
-          <button id="btnOpenRecordsModal" class="px-3 py-1.5 bg-white dark:bg-[#1D1E29] hover:bg-[#111111] hover:text-white dark:hover:bg-white dark:hover:text-[#111111] text-[#111111] dark:text-white border border-[#111111] dark:border-zinc-600 rounded-lg text-xs font-semibold transition-all cursor-pointer">
+          <button id="btnOpenRecordsModal" class="px-3 py-1.5 bg-white dark:bg-[#1A1A1A] hover:bg-[#111111] hover:text-white dark:hover:bg-white dark:hover:text-[#111111] text-[#111111] dark:text-white border border-[#111111] dark:border-[#333333] rounded-lg text-xs font-semibold transition-all cursor-pointer btn-hover-lift">
             Records
           </button>
 
           <!-- Controls Cheat Sheet Opener -->
-          <button id="btnOpenControlsModal" class="px-3 py-1.5 bg-white dark:bg-[#1D1E29] hover:bg-[#111111] hover:text-white dark:hover:bg-white dark:hover:text-[#111111] text-[#111111] dark:text-white border border-[#111111] dark:border-zinc-600 rounded-lg text-xs font-semibold transition-all cursor-pointer">
+          <button id="btnOpenControlsModal" class="px-3 py-1.5 bg-white dark:bg-[#1A1A1A] hover:bg-[#111111] hover:text-white dark:hover:bg-white dark:hover:text-[#111111] text-[#111111] dark:text-white border border-[#111111] dark:border-[#333333] rounded-lg text-xs font-semibold transition-all cursor-pointer btn-hover-lift">
             Controls
           </button>
         </div>
@@ -376,9 +414,9 @@
       <main class="flex-1 flex items-center justify-center p-3 md:p-6 lg:p-8">
         <div class="w-full max-w-[520px] editorial-card p-6 sm:p-7 animate-menu-reveal flex flex-col gap-4">
 
-          <!-- ROUND SUMMARY BANNER (Shown cleanly after death) -->
-          <div id="lobbyRoundSummary" class="hidden p-3.5 bg-[#F7F7F5] dark:bg-[#111218] border border-[#111111] dark:border-zinc-700 rounded-xl flex flex-col gap-2.5">
-            <div class="flex items-center justify-between pb-2 border-b border-zinc-300 dark:border-zinc-800">
+          <!-- ROUND SUMMARY BANNER (Shown cleanly after death with animated pop-in) -->
+          <div id="lobbyRoundSummary" class="hidden p-3.5 bg-[#F7F7F5] dark:bg-[#121212] border border-[#111111] dark:border-[#262626] rounded-xl flex flex-col gap-2.5 shadow-sm">
+            <div class="flex items-center justify-between pb-2 border-b border-zinc-300 dark:border-[#262626]">
               <div class="flex items-center gap-2">
                 <span class="font-serif text-base font-bold text-[#111111] dark:text-white">Round Recap</span>
                 <span id="summaryBadgeNewRecord" class="hidden bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded font-mono uppercase tracking-wider">
@@ -390,19 +428,19 @@
 
             <!-- 4 Clean Even Stat Tiles -->
             <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5 text-xs font-mono">
-              <div class="bg-white dark:bg-[#161720] p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center flex flex-col justify-center">
+              <div class="bg-white dark:bg-[#181818] p-2.5 rounded-lg border border-zinc-200 dark:border-[#262626] text-center flex flex-col justify-center transition-all hover:border-zinc-400 dark:hover:border-zinc-600">
                 <div class="text-[9px] uppercase font-bold tracking-wider text-zinc-500 mb-0.5">Peak Mass</div>
                 <div id="summaryPeakMass" class="text-base font-bold text-[#111111] dark:text-white">0</div>
               </div>
-              <div class="bg-white dark:bg-[#161720] p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center flex flex-col justify-center">
+              <div class="bg-white dark:bg-[#181818] p-2.5 rounded-lg border border-zinc-200 dark:border-[#262626] text-center flex flex-col justify-center transition-all hover:border-zinc-400 dark:hover:border-zinc-600">
                 <div class="text-[9px] uppercase font-bold tracking-wider text-zinc-500 mb-0.5">Score</div>
                 <div id="summaryScore" class="text-base font-bold text-[#111111] dark:text-white">0</div>
               </div>
-              <div class="bg-white dark:bg-[#161720] p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center flex flex-col justify-center">
+              <div class="bg-white dark:bg-[#181818] p-2.5 rounded-lg border border-zinc-200 dark:border-[#262626] text-center flex flex-col justify-center transition-all hover:border-zinc-400 dark:hover:border-zinc-600">
                 <div class="text-[9px] uppercase font-bold tracking-wider text-zinc-500 mb-0.5">Pellets</div>
                 <div id="summaryFoodEaten" class="text-base font-bold text-[#111111] dark:text-white">0</div>
               </div>
-              <div class="bg-white dark:bg-[#161720] p-2.5 rounded-lg border border-zinc-200 dark:border-zinc-800 text-center flex flex-col justify-center">
+              <div class="bg-white dark:bg-[#181818] p-2.5 rounded-lg border border-zinc-200 dark:border-[#262626] text-center flex flex-col justify-center transition-all hover:border-zinc-400 dark:hover:border-zinc-600">
                 <div class="text-[9px] uppercase font-bold tracking-wider text-zinc-500 mb-0.5">Time</div>
                 <div id="summaryTimeSurvived" class="text-base font-bold text-[#111111] dark:text-white">0s</div>
               </div>
@@ -416,7 +454,7 @@
                 Direct match invite: <strong id="urlRoomCodeText" class="font-mono text-sm underline font-bold"></strong>
               </span>
             </div>
-            <button id="btnJoinUrlRoom" class="btn-editorial px-4 py-1 text-xs font-bold cursor-pointer">
+            <button id="btnJoinUrlRoom" class="btn-editorial px-4 py-1 text-xs font-bold cursor-pointer btn-hover-lift">
               Join Match Now
             </button>
           </div>
@@ -424,7 +462,7 @@
           <!-- ============================================== -->
           <!-- PLAYER SETUP (EVEN, BALANCED BOX)              -->
           <!-- ============================================== -->
-          <div class="p-4.5 sm:p-5 bg-zinc-50/90 dark:bg-[#12131A] rounded-xl border border-zinc-200 dark:border-zinc-800 flex items-center gap-5">
+          <div class="p-4.5 sm:p-5 bg-zinc-50/90 dark:bg-[#121212] rounded-xl border border-zinc-200 dark:border-[#262626] flex items-center gap-5">
             <!-- Left: Avatar Preview Blob -->
             <div
               id="previewCellAvatar"
@@ -449,12 +487,12 @@
                   maxlength="16"
                   value="Player"
                   placeholder="Your nickname..."
-                  class="h-11 flex-1 font-serif border border-[#111111] dark:border-zinc-700 rounded-lg px-3.5 text-sm font-bold text-[#111111] dark:text-white bg-white dark:bg-[#1A1B24] focus:outline-none focus:ring-1 focus:ring-[#111111] dark:focus:ring-white transition-all shadow-sm"
+                  class="h-11 flex-1 font-serif border border-[#111111] dark:border-[#262626] rounded-lg px-3.5 text-sm font-bold text-[#111111] dark:text-white bg-white dark:bg-[#181818] focus:outline-none focus:ring-1 focus:ring-[#111111] dark:focus:ring-white transition-all shadow-sm"
                 />
                 <button
                   id="btnRandomName"
                   type="button"
-                  class="h-11 px-3.5 font-serif border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-[#1A1B24] hover:bg-zinc-100 dark:hover:bg-zinc-800 text-xs font-bold text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer transition-colors shrink-0 shadow-sm"
+                  class="h-11 px-3.5 font-serif border border-zinc-300 dark:border-[#262626] bg-white dark:bg-[#181818] hover:bg-zinc-100 dark:hover:bg-[#222222] text-xs font-bold text-zinc-700 dark:text-zinc-300 rounded-lg cursor-pointer transition-colors shrink-0 shadow-sm btn-hover-lift"
                   title="Generate Brainrot Nickname"
                 >
                   Random
@@ -470,32 +508,24 @@
           <!-- PRIMARY MODES: EVEN BALANCED 2-COLUMN BOXES    -->
           <!-- ============================================== -->
           <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5 items-stretch pt-2 sm:pt-3">
-            <!-- Play Online (Box 1) -->
-            <div class="relative group">
-              <button
-                id="btnPlayOnline"
-                class="w-full h-full min-h-[92px] p-4 font-serif bg-[#111111] dark:bg-black hover:bg-zinc-900 text-white rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer shadow-md hover:shadow-lg transition-all border border-[#111111] dark:border-zinc-700"
-              >
-                <span class="text-base font-bold text-white flex items-center gap-2">
-                  <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                  Play Online
-                </span>
-                <span id="btnOnlineSubtext" class="text-xs text-zinc-300">
-                  Public Arena · <span id="onlinePlayerCountBadge">Live</span>
-                </span>
-              </button>
-
-              <!-- Live Player Count Tooltip on Hover -->
-              <div id="onlineTooltip" class="absolute -top-9 left-1/2 -translate-x-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity duration-150 bg-black/95 text-white text-[11px] font-serif px-3 py-1 rounded-md shadow-xl whitespace-nowrap z-30 border border-zinc-700 flex items-center gap-2">
-                <span class="w-1.5 h-1.5 rounded-full bg-emerald-400"></span>
-                <span id="onlineCountTooltipText">Connecting to arena...</span>
-              </div>
-            </div>
+            <!-- Play Online (Box 1 - Primary Standard Mode) -->
+            <button
+              id="btnPlayOnline"
+              class="w-full h-full min-h-[92px] p-4 font-serif bg-[#111111] dark:bg-black hover:bg-zinc-900 text-white rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer shadow-md hover:shadow-lg transition-all border border-[#111111] dark:border-[#262626] btn-hover-lift"
+            >
+              <span class="text-base font-bold text-white flex items-center gap-2">
+                <span class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse"></span>
+                Play Online
+              </span>
+              <span id="btnOnlineSubtext" class="text-xs text-zinc-300">
+                Public Arena · <span id="onlinePlayerCountBadge">Live</span>
+              </span>
+            </button>
 
             <!-- Play Offline (Box 2 - Matching Dimensions & Symmetry) -->
             <button
               id="btnPlayNormal"
-              class="w-full h-full min-h-[92px] p-4 font-serif bg-white dark:bg-[#1A1B24] hover:bg-zinc-100 dark:hover:bg-[#222430] text-[#111111] dark:text-white rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:shadow transition-all border border-zinc-300 dark:border-zinc-700"
+              class="w-full h-full min-h-[92px] p-4 font-serif bg-white dark:bg-[#181818] hover:bg-zinc-100 dark:hover:bg-[#222222] text-[#111111] dark:text-white rounded-xl flex flex-col items-center justify-center gap-1.5 cursor-pointer shadow-sm hover:shadow transition-all border border-zinc-300 dark:border-[#262626] btn-hover-lift"
             >
               <span class="text-base font-bold text-[#111111] dark:text-white flex items-center gap-2">
                 <span class="w-2.5 h-2.5 rounded-full bg-zinc-400 dark:bg-zinc-500"></span>
@@ -512,12 +542,12 @@
 
       <!-- Minimal Controls Footer (No Splitr logo, input instructions only) -->
       <footer class="w-full pb-3 px-4 flex justify-center shrink-0">
-        <div class="bg-white/80 dark:bg-[#15161E]/80 border border-[#111111] dark:border-zinc-700 px-5 py-1.5 rounded-full text-xs font-mono text-zinc-600 dark:text-zinc-400 flex items-center gap-2.5">
+        <div class="bg-white/80 dark:bg-[#141414]/90 border border-[#111111] dark:border-[#262626] px-5 py-1.5 rounded-full text-xs font-mono text-zinc-600 dark:text-zinc-400 flex items-center gap-2.5 shadow-sm">
           <span>Mouse to move</span>
           <span>·</span>
-          <span><kbd class="font-bold text-[10px] px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 text-[#111111] dark:text-white rounded">Space</kbd> to split</span>
+          <span><kbd class="font-bold text-[10px] px-1.5 py-0.5 bg-zinc-200 dark:bg-[#222222] text-[#111111] dark:text-white rounded">Space</kbd> to split</span>
           <span>·</span>
-          <span><kbd class="font-bold text-[10px] px-1.5 py-0.5 bg-zinc-200 dark:bg-zinc-800 text-[#111111] dark:text-white rounded">W</kbd> to eject</span>
+          <span><kbd class="font-bold text-[10px] px-1.5 py-0.5 bg-zinc-200 dark:bg-[#222222] text-[#111111] dark:text-white rounded">W</kbd> to eject</span>
         </div>
       </footer>
     </div>
@@ -525,35 +555,35 @@
     <!-- ======================================================== -->
     <!-- CAREER STATS & RECORDS MODAL                             -->
     <!-- ======================================================== -->
-    <div id="modalRecords" class="fixed inset-0 z-30 hidden bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div id="modalRecords" class="fixed inset-0 z-30 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div class="w-full max-w-md editorial-card p-6 flex flex-col gap-4 animate-menu-reveal">
-        <div class="flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-zinc-800">
+        <div class="flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-[#262626]">
           <span class="font-serif text-xl font-bold text-[#111111] dark:text-white">Career Intelligence</span>
-          <button id="btnCloseRecordsModal" class="text-xs font-mono px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer">
+          <button id="btnCloseRecordsModal" class="text-xs font-mono px-2 py-1 rounded border border-zinc-300 dark:border-[#262626] hover:bg-zinc-200 dark:hover:bg-[#222222] cursor-pointer">
             Esc
           </button>
         </div>
 
         <div class="grid grid-cols-2 gap-3 text-xs font-mono">
-          <div class="bg-zinc-50 dark:bg-[#12131A] p-3 rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div class="bg-zinc-50 dark:bg-[#181818] p-3 rounded-lg border border-zinc-200 dark:border-[#262626]">
             <div class="text-[10px] uppercase text-zinc-500 mb-1">Personal Best Mass</div>
             <div id="careerBestMass" class="text-xl font-bold text-[#111111] dark:text-white">0</div>
           </div>
-          <div class="bg-zinc-50 dark:bg-[#12131A] p-3 rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div class="bg-zinc-50 dark:bg-[#181818] p-3 rounded-lg border border-zinc-200 dark:border-[#262626]">
             <div class="text-[10px] uppercase text-zinc-500 mb-1">Rounds Played</div>
             <div id="careerGamesCount" class="text-xl font-bold text-[#111111] dark:text-white">0</div>
           </div>
-          <div class="bg-zinc-50 dark:bg-[#12131A] p-3 rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div class="bg-zinc-50 dark:bg-[#181818] p-3 rounded-lg border border-zinc-200 dark:border-[#262626]">
             <div class="text-[10px] uppercase text-zinc-500 mb-1">Total Pellets Eaten</div>
             <div id="careerTotalPellets" class="text-xl font-bold text-[#111111] dark:text-white">0</div>
           </div>
-          <div class="bg-zinc-50 dark:bg-[#12131A] p-3 rounded-lg border border-zinc-200 dark:border-zinc-800">
+          <div class="bg-zinc-50 dark:bg-[#181818] p-3 rounded-lg border border-zinc-200 dark:border-[#262626]">
             <div class="text-[10px] uppercase text-zinc-500 mb-1">Total Survival Time</div>
             <div id="careerTotalTime" class="text-xl font-bold text-[#111111] dark:text-white">0s</div>
           </div>
         </div>
 
-        <button id="btnDismissRecords" class="btn-editorial w-full py-2.5 rounded-lg text-xs font-bold cursor-pointer">
+        <button id="btnDismissRecords" class="btn-editorial w-full py-2.5 rounded-lg text-xs font-bold cursor-pointer btn-hover-lift">
           Done
         </button>
       </div>
@@ -562,51 +592,51 @@
     <!-- ======================================================== -->
     <!-- CONTROLS & HOW-TO-PLAY MODAL                             -->
     <!-- ======================================================== -->
-    <div id="modalControls" class="fixed inset-0 z-30 hidden bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div id="modalControls" class="fixed inset-0 z-30 hidden bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
       <div class="w-full max-w-md editorial-card p-6 flex flex-col gap-4 animate-menu-reveal">
-        <div class="flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-zinc-800">
+        <div class="flex items-center justify-between pb-2 border-b border-zinc-200 dark:border-[#262626]">
           <span class="font-serif text-xl font-bold text-[#111111] dark:text-white">Arena Controls</span>
-          <button id="btnCloseControlsModal" class="text-xs font-mono px-2 py-1 rounded border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-200 dark:hover:bg-zinc-800 cursor-pointer">
+          <button id="btnCloseControlsModal" class="text-xs font-mono px-2 py-1 rounded border border-zinc-300 dark:border-[#262626] hover:bg-zinc-200 dark:hover:bg-[#222222] cursor-pointer">
             Esc
           </button>
         </div>
 
         <div class="space-y-2 text-xs">
-          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#12131A] border border-zinc-200 dark:border-zinc-800">
+          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#181818] border border-zinc-200 dark:border-[#262626]">
             <span class="font-semibold text-zinc-700 dark:text-zinc-300">Steer Cell</span>
             <span class="font-mono text-zinc-500">Mouse Cursor</span>
           </div>
-          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#12131A] border border-zinc-200 dark:border-zinc-800">
+          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#181818] border border-zinc-200 dark:border-[#262626]">
             <span class="font-semibold text-zinc-700 dark:text-zinc-300">Split Cell in Two</span>
             <kbd class="font-mono font-bold px-2 py-0.5 bg-[#111111] dark:bg-white text-white dark:text-[#111111] rounded text-[10px]">SPACE</kbd>
           </div>
-          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#12131A] border border-zinc-200 dark:border-zinc-800">
+          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#181818] border border-zinc-200 dark:border-[#262626]">
             <span class="font-semibold text-zinc-700 dark:text-zinc-300">Eject Mass Pellet</span>
             <kbd class="font-mono font-bold px-2 py-0.5 bg-[#111111] dark:bg-white text-white dark:text-[#111111] rounded text-[10px]">W</kbd>
           </div>
-          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#12131A] border border-zinc-200 dark:border-zinc-800">
+          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#181818] border border-zinc-200 dark:border-[#262626]">
             <span class="font-semibold text-zinc-700 dark:text-zinc-300">Open In-Game Chat</span>
             <kbd class="font-mono font-bold px-2 py-0.5 bg-[#111111] dark:bg-white text-white dark:text-[#111111] rounded text-[10px]">/ or ENTER</kbd>
           </div>
-          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#12131A] border border-zinc-200 dark:border-zinc-800">
+          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#181818] border border-zinc-200 dark:border-[#262626]">
             <span class="font-semibold text-zinc-700 dark:text-zinc-300">Toggle Mass Numbers</span>
             <kbd class="font-mono font-bold px-2 py-0.5 bg-[#111111] dark:bg-white text-white dark:text-[#111111] rounded text-[10px]">M</kbd>
           </div>
-          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#12131A] border border-zinc-200 dark:border-zinc-800">
+          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#181818] border border-zinc-200 dark:border-[#262626]">
             <span class="font-semibold text-zinc-700 dark:text-zinc-300">Toggle Leaderboard</span>
             <kbd class="font-mono font-bold px-2 py-0.5 bg-[#111111] dark:bg-white text-white dark:text-[#111111] rounded text-[10px]">L</kbd>
           </div>
-          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#12131A] border border-zinc-200 dark:border-zinc-800">
+          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#181818] border border-zinc-200 dark:border-[#262626]">
             <span class="font-semibold text-zinc-700 dark:text-zinc-300">Toggle Dark / Light Mode</span>
             <kbd class="font-mono font-bold px-2 py-0.5 bg-[#111111] dark:bg-white text-white dark:text-[#111111] rounded text-[10px]">T</kbd>
           </div>
-          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#12131A] border border-zinc-200 dark:border-zinc-800">
+          <div class="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-[#181818] border border-zinc-200 dark:border-[#262626]">
             <span class="font-semibold text-zinc-700 dark:text-zinc-300">Menu / Exit</span>
             <kbd class="font-mono font-bold px-2 py-0.5 bg-[#111111] dark:bg-white text-white dark:text-[#111111] rounded text-[10px]">ESC</kbd>
           </div>
         </div>
 
-        <button id="btnDismissControls" class="btn-editorial w-full py-2.5 rounded-lg text-xs font-bold cursor-pointer">
+        <button id="btnDismissControls" class="btn-editorial w-full py-2.5 rounded-lg text-xs font-bold cursor-pointer btn-hover-lift">
           Got it
         </button>
       </div>
@@ -627,10 +657,10 @@
           Unable to establish WebSocket connection to the multiplayer room.
         </p>
         <div class="flex flex-col gap-2 pt-2">
-          <button id="btnReturnToMenu" class="btn-editorial w-full py-2.5 rounded-lg text-xs font-bold cursor-pointer">
+          <button id="btnReturnToMenu" class="btn-editorial w-full py-2.5 rounded-lg text-xs font-bold cursor-pointer btn-hover-lift">
             Return to Menu
           </button>
-          <button id="btnFallbackPlayNormal" class="btn-editorial-secondary w-full py-2.5 rounded-lg text-xs font-bold cursor-pointer">
+          <button id="btnFallbackPlayNormal" class="btn-editorial-secondary w-full py-2.5 rounded-lg text-xs font-bold cursor-pointer btn-hover-lift">
             Play Normal (Offline Bots)
           </button>
         </div>

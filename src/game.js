@@ -35,14 +35,14 @@ export function getRandomPaletteColor() {
   // --- ARENA TUNING (Conforms to PHYSICS_SPEC.md) ---
   const MAP_SIZE = 10000;
   const GRID_SIZE = 60;
-  const FOOD_COUNT = 2400;
+  const FOOD_COUNT = 4200;
   const VIRUS_COUNT = 38;
   const FOOD_MASS = 3;
   const SUPER_FOOD_MASS = 12;
 
-  // Mass pellets with exact constant ratio (10 mass shot : 11 mass lost)
-  const EJECT_MASS = 10;
-  const EJECT_LOSS = 11;
+  // Mass pellets: 15 mass points for each ejected mass pellet
+  const EJECT_MASS = 15;
+  const EJECT_LOSS = 15;
   const EJECT_COOLDOWN_MS = 130;
 
   const BASE_PLAYER_MASS = 50;
@@ -56,11 +56,11 @@ export function getRandomPaletteColor() {
     return Math.sqrt(Math.max(1, m) * 100);
   }
 
-  // Smooth Speed Curve
+  // Smooth Speed Curve - Snappy and faster for smaller cells
   function massToSpeed(m) {
-    const baseSpeed = 920;
-    const exponent = 0.38;
-    const minimumSpeed = 72;
+    const baseSpeed = 1180;
+    const exponent = 0.40;
+    const minimumSpeed = 75;
     return Math.max(
       minimumSpeed,
       baseSpeed / Math.pow(Math.max(1, m), exponent)
@@ -302,7 +302,7 @@ export function getRandomPaletteColor() {
       this.x = x;
       this.y = y;
       this.mass = EJECT_MASS;
-      this.radius = 8.5;
+      this.radius = 12;
       this.color = color || '#111111';
       const launchSpeed = 820;
       this.vx = Math.cos(angle) * launchSpeed;
@@ -609,6 +609,15 @@ export function getRandomPaletteColor() {
       window.addEventListener('mousemove', (e) => {
         this.mouseScreenX = e.clientX;
         this.mouseScreenY = e.clientY;
+        const halfW = (this.canvas.width / this.dpr) / 2;
+        const halfH = (this.canvas.height / this.dpr) / 2;
+        this.mouseWorldX = this.camX + (this.mouseScreenX - halfW) / this.camZoom;
+        this.mouseWorldY = this.camY + (this.mouseScreenY - halfH) / this.camZoom;
+        const p = this.players.get(this.localPlayerId);
+        if (p) {
+          p.targetX = this.mouseWorldX;
+          p.targetY = this.mouseWorldY;
+        }
       });
 
       // Keyboard Controls
@@ -627,9 +636,16 @@ export function getRandomPaletteColor() {
               const btnJoin = document.getElementById('btnJoinPrivate');
               if (btnJoin) btnJoin.click();
             } else {
-              this.startMatch();
+              this.startOnlineGame();
             }
           }
+          return;
+        }
+
+        // On lobby menu: pressing Enter joins standard online match
+        if (e.key === 'Enter' && !this.isAlive && this.lobbyScreen && !this.lobbyScreen.classList.contains('hidden')) {
+          e.preventDefault();
+          this.startOnlineGame();
           return;
         }
 
@@ -1015,19 +1031,13 @@ export function getRandomPaletteColor() {
         .then(data => {
           const count = typeof data.connectedPlayers === 'number' ? data.connectedPlayers : 0;
           const badge = document.getElementById('onlinePlayerCountBadge');
-          const tooltip = document.getElementById('onlineCountTooltipText');
           if (badge) {
             badge.textContent = `${count} Online`;
-          }
-          if (tooltip) {
-            tooltip.textContent = `${count} player${count === 1 ? '' : 's'} active in arena`;
           }
         })
         .catch(() => {
           const badge = document.getElementById('onlinePlayerCountBadge');
-          const tooltip = document.getElementById('onlineCountTooltipText');
           if (badge) badge.textContent = 'Active';
-          if (tooltip) tooltip.textContent = 'Public room active';
         });
     }
 
@@ -2128,6 +2138,16 @@ export function getRandomPaletteColor() {
 
     // --- GAME ACTIONS: SPLIT & EJECT ---
     handleSplit() {
+      const halfW = (this.canvas.width / this.dpr) / 2;
+      const halfH = (this.canvas.height / this.dpr) / 2;
+      this.mouseWorldX = this.camX + (this.mouseScreenX - halfW) / this.camZoom;
+      this.mouseWorldY = this.camY + (this.mouseScreenY - halfH) / this.camZoom;
+      const p = this.players.get(this.localPlayerId);
+      if (p) {
+        p.targetX = this.mouseWorldX;
+        p.targetY = this.mouseWorldY;
+      }
+
       if (this.isOnlineMode) {
         this.playSplitSound();
         if (this.onlineClient && this.onlineClient.isConnected) {
@@ -2146,6 +2166,16 @@ export function getRandomPaletteColor() {
     }
 
     handleEject() {
+      const halfW = (this.canvas.width / this.dpr) / 2;
+      const halfH = (this.canvas.height / this.dpr) / 2;
+      this.mouseWorldX = this.camX + (this.mouseScreenX - halfW) / this.camZoom;
+      this.mouseWorldY = this.camY + (this.mouseScreenY - halfH) / this.camZoom;
+      const p = this.players.get(this.localPlayerId);
+      if (p) {
+        p.targetX = this.mouseWorldX;
+        p.targetY = this.mouseWorldY;
+      }
+
       if (this.isOnlineMode) {
         if (this.onlineClient && this.onlineClient.isConnected && this.isAlive) {
           this.playEjectSound();
@@ -2167,8 +2197,9 @@ export function getRandomPaletteColor() {
       const p = this.players.get(playerId);
       if (!p || p.cells.length >= MAX_SPLITS) return;
 
-      const targetX = p.targetX !== undefined ? p.targetX : this.mouseWorldX;
-      const targetY = p.targetY !== undefined ? p.targetY : this.mouseWorldY;
+      const isLocal = (playerId === this.localPlayerId);
+      const targetX = isLocal ? this.mouseWorldX : (p.targetX !== undefined ? p.targetX : this.mouseWorldX);
+      const targetY = isLocal ? this.mouseWorldY : (p.targetY !== undefined ? p.targetY : this.mouseWorldY);
 
       const newCells = [];
       const canAdd = MAX_SPLITS - p.cells.length;
@@ -2182,12 +2213,30 @@ export function getRandomPaletteColor() {
           cell.radius = massToRadius(cell.mass);
           cell.recombineTimer = calcRecombineTime(splitMass);
 
-          const dx = targetX - cell.x;
-          const dy = targetY - cell.y;
-          const dist = Math.hypot(dx, dy) || 1;
-          const dirX = dx / dist;
-          const dirY = dy / dist;
-          const splitAngle = Math.atan2(dy, dx);
+          let dx = targetX - cell.x;
+          let dy = targetY - cell.y;
+          let dist = Math.hypot(dx, dy);
+          let dirX = 1;
+          let dirY = 0;
+          let splitAngle = 0;
+
+          if (dist > 5) {
+            dirX = dx / dist;
+            dirY = dy / dist;
+            splitAngle = Math.atan2(dy, dx);
+          } else {
+            // If mouse cursor is right on cell center, split in current cell velocity direction
+            const moveSpeed = Math.hypot(cell.vx, cell.vy);
+            if (moveSpeed > 5) {
+              dirX = cell.vx / moveSpeed;
+              dirY = cell.vy / moveSpeed;
+              splitAngle = Math.atan2(dirY, dirX);
+            } else {
+              dirX = 1;
+              dirY = 0;
+              splitAngle = 0;
+            }
+          }
 
           // Parent cell soft-body elastic rebound squish
           cell.triggerSquish(0.82, splitAngle);
@@ -2226,23 +2275,43 @@ export function getRandomPaletteColor() {
       const p = this.players.get(playerId);
       if (!p) return;
 
-      const targetX = p.targetX !== undefined ? p.targetX : this.mouseWorldX;
-      const targetY = p.targetY !== undefined ? p.targetY : this.mouseWorldY;
+      const isLocal = (playerId === this.localPlayerId);
+      const targetX = isLocal ? this.mouseWorldX : (p.targetX !== undefined ? p.targetX : this.mouseWorldX);
+      const targetY = isLocal ? this.mouseWorldY : (p.targetY !== undefined ? p.targetY : this.mouseWorldY);
 
       for (const cell of p.cells) {
         if (cell.mass > BASE_PLAYER_MASS + EJECT_LOSS) {
           cell.mass -= EJECT_LOSS;
           cell.radius = massToRadius(cell.mass);
 
-          const dx = targetX - cell.x;
-          const dy = targetY - cell.y;
-          const dist = Math.hypot(dx, dy) || 1;
-          const angle = Math.atan2(dy, dx);
+          let dx = targetX - cell.x;
+          let dy = targetY - cell.y;
+          let dist = Math.hypot(dx, dy);
+          let dirX = 1;
+          let dirY = 0;
+          let angle = 0;
+
+          if (dist > 5) {
+            dirX = dx / dist;
+            dirY = dy / dist;
+            angle = Math.atan2(dy, dx);
+          } else {
+            const moveSpeed = Math.hypot(cell.vx, cell.vy);
+            if (moveSpeed > 5) {
+              dirX = cell.vx / moveSpeed;
+              dirY = cell.vy / moveSpeed;
+              angle = Math.atan2(dirY, dirX);
+            } else {
+              dirX = 1;
+              dirY = 0;
+              angle = 0;
+            }
+          }
 
           cell.triggerSquish(0.95, angle);
 
-          const spawnX = cell.x + (dx / dist) * (cell.radius + 12);
-          const spawnY = cell.y + (dy / dist) * (cell.radius + 12);
+          const spawnX = cell.x + dirX * (cell.radius + 12);
+          const spawnY = cell.y + dirY * (cell.radius + 12);
 
           const massPellet = new EjectedMass(
             'em_' + Math.random().toString(36).substring(2, 8),
@@ -2347,6 +2416,10 @@ export function getRandomPaletteColor() {
       for (const p of this.players.values()) {
         if (p.isBot) continue; // Bots simulated in updateBotAI
         const isLocal = (p.id === this.localPlayerId);
+        if (isLocal) {
+          p.targetX = this.mouseWorldX;
+          p.targetY = this.mouseWorldY;
+        }
         const targetX = isLocal ? this.mouseWorldX : (p.targetX !== undefined ? p.targetX : (p.cells[0]?.x ?? MAP_SIZE / 2));
         const targetY = isLocal ? this.mouseWorldY : (p.targetY !== undefined ? p.targetY : (p.cells[0]?.y ?? MAP_SIZE / 2));
 
@@ -2674,6 +2747,9 @@ export function getRandomPaletteColor() {
 
       if (this.lobbyRoundSummary) {
         this.lobbyRoundSummary.classList.remove('hidden');
+        this.lobbyRoundSummary.classList.remove('animate-recap-pop');
+        void this.lobbyRoundSummary.offsetWidth; // Force reflow to replay entrance animation
+        this.lobbyRoundSummary.classList.add('animate-recap-pop');
       }
 
       this.initCareerStats();
@@ -2682,6 +2758,12 @@ export function getRandomPaletteColor() {
 
       if (this.lobbyScreen) {
         this.lobbyScreen.classList.remove('hidden');
+        const mainCard = this.lobbyScreen.querySelector('.editorial-card');
+        if (mainCard) {
+          mainCard.classList.remove('animate-menu-reveal');
+          void mainCard.offsetWidth;
+          mainCard.classList.add('animate-menu-reveal');
+        }
       }
     }
 
@@ -2913,7 +2995,7 @@ export function getRandomPaletteColor() {
       ctx.scale(this.dpr, this.dpr);
 
       // Arena floor color based on theme
-      ctx.fillStyle = this.isDarkMode ? '#0E0F14' : '#F7F7F5';
+      ctx.fillStyle = this.isDarkMode ? '#0A0A0A' : '#F7F7F5';
       ctx.fillRect(0, 0, w, h);
 
       ctx.save();
@@ -3037,9 +3119,9 @@ export function getRandomPaletteColor() {
         }
         ctx.closePath();
 
-        ctx.fillStyle = this.isDarkMode ? '#151622' : '#FFFFFF';
+        ctx.fillStyle = '#22C55E';
         ctx.fill();
-        ctx.strokeStyle = this.isDarkMode ? '#10B981' : '#111111';
+        ctx.strokeStyle = this.isDarkMode ? '#FFFFFF' : '#111111';
         ctx.lineWidth = 3.5;
         ctx.stroke();
 
@@ -3173,14 +3255,14 @@ export function getRandomPaletteColor() {
           ctx.stroke();
         }
 
-        // In-cell names & mass scaling strictly inside boundaries
+        // In-cell names & mass scaling smoothly with cell size
         if (c.radius >= 18) {
-          let fontSize = Math.max(10, Math.min(c.radius * 0.32, 28));
+          let fontSize = Math.max(10, Math.min(c.radius * 0.32, 140));
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
           ctx.font = `700 ${fontSize}px ${fontFam}`;
-          const maxTextW = c.radius * 1.6;
+          const maxTextW = c.radius * 1.65;
           let textW = ctx.measureText(c.name).width;
 
           // Scale font size down smoothly if name exceeds in-cell boundaries
@@ -3314,9 +3396,9 @@ export function getRandomPaletteColor() {
         }
         ctx.closePath();
 
-        ctx.fillStyle = this.isDarkMode ? '#151622' : '#FFFFFF';
+        ctx.fillStyle = '#22C55E';
         ctx.fill();
-        ctx.strokeStyle = this.isDarkMode ? '#10B981' : '#111111';
+        ctx.strokeStyle = this.isDarkMode ? '#FFFFFF' : '#111111';
         ctx.lineWidth = 3.5;
         ctx.stroke();
 
@@ -3353,7 +3435,7 @@ export function getRandomPaletteColor() {
 
         const isSelf = c.playerId === this.localPlayerId;
         const borderCol = this.isDarkMode
-          ? (c.color === '#111111' ? '#FFFFFF' : '#0E0F14')
+          ? (c.color === '#111111' ? '#FFFFFF' : '#0A0A0A')
           : '#111111';
 
         ctx.strokeStyle = borderCol;
@@ -3414,7 +3496,7 @@ export function getRandomPaletteColor() {
         if (!isSmall) {
           const isSelf = c.playerId === this.localPlayerId;
           const borderCol = this.isDarkMode
-            ? (c.color === '#111111' ? '#FFFFFF' : '#0E0F14')
+            ? (c.color === '#111111' ? '#FFFFFF' : '#0A0A0A')
             : '#111111';
 
           ctx.beginPath();
@@ -3425,7 +3507,7 @@ export function getRandomPaletteColor() {
         }
 
         if (c.radius > 16) {
-          const fontSize = Math.max(12, Math.floor(c.radius * 0.32));
+          let fontSize = Math.max(10, Math.min(c.radius * 0.32, 140));
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
@@ -3434,6 +3516,12 @@ export function getRandomPaletteColor() {
           const strokeColor = isDarkCell ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)';
 
           ctx.font = `700 ${fontSize}px ${fontFam}`;
+          const maxTextW = c.radius * 1.65;
+          let textW = ctx.measureText(c.name).width;
+          if (textW > maxTextW) {
+            fontSize = Math.max(8, Math.floor(fontSize * (maxTextW / textW)));
+            ctx.font = `700 ${fontSize}px ${fontFam}`;
+          }
           ctx.lineWidth = Math.max(2.5, fontSize * 0.18);
           ctx.strokeStyle = strokeColor;
           ctx.fillStyle = textColor;

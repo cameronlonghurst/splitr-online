@@ -60,8 +60,8 @@ interface FoodPellet {
 }
 
 const MAP_SIZE = 40000;
-const FOOD_COUNT = 3200;
-const BASE_PLAYER_MASS = 25;
+const FOOD_COUNT = 4800;
+const BASE_PLAYER_MASS = 50;
 const MAX_PLAYERS = 64;
 const MAX_CELLS_PER_PLAYER = 16;
 const MIN_SPLIT_MASS = 36;
@@ -76,7 +76,7 @@ const VIRUS_COUNT = 80; // Pool of 80 static viruses for 40,000x40,000 world
 const BASE_VIRUS_MASS = 100;
 const VIRUS_SPLIT_THRESHOLD = 200; // once fed ~7 pellets exceeding ~200 mass
 const EJECT_MIN_CELL_MASS = 32;
-const EJECT_MASS_COST = 16;
+const EJECT_MASS_COST = 15;
 const EJECT_PELLET_MASS = 15;
 const EJECT_IMPULSE = 800; // initial launch velocity ~800 px/s
 const EJECT_RATE_LIMIT_MS = 110; // ~9 shots/s
@@ -582,7 +582,7 @@ export class GameRoom extends DurableObject {
         const dy = session.targetY - cell.y;
         const dist = Math.hypot(dx, dy);
         if (dist > 5) {
-          const speed = Math.max(70, 960 / Math.pow(cell.mass, 0.38));
+          const speed = Math.max(75, 1180 / Math.pow(cell.mass, 0.40));
           const targetVx = (dx / dist) * speed;
           const targetVy = (dy / dist) * speed;
           const lerpRate = Math.min(1, dt * 5.0);
