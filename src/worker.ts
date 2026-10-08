@@ -60,11 +60,13 @@ interface FoodPellet {
   mass: number;
   radius: number;
   isSuper?: boolean;
+  isMedium?: boolean;
 }
 
-const MAP_SIZE = 40000;
-const FOOD_COUNT = 9600; // Sufficient pellets to populate the 40,000x40,000 arena
+const MAP_SIZE = 10000;
+const FOOD_COUNT = 4800; // Standardized with offline mode for rich, vibrant density
 const FOOD_MASS = 2; // Standardized food pellet mass value
+const MEDIUM_FOOD_MASS = 5; // Standardized medium food pellet mass value
 const SUPER_FOOD_MASS = 10; // Standardized super food pellet mass value
 const BASE_PLAYER_MASS = 50;
 const MAX_PLAYERS = 64;
@@ -77,7 +79,7 @@ const MAX_MESSAGES_PER_SEC = 50;
 const MAX_PAYLOAD_BYTES = 1024;
 
 // Virus & Ejected Pellet Constants
-const VIRUS_COUNT = 80; // Pool of 80 static viruses for 40,000x40,000 world
+const VIRUS_COUNT = 38; // Standardized with offline mode (38 viruses)
 const BASE_VIRUS_MASS = 100;
 const VIRUS_SPLIT_THRESHOLD = 200; // once fed ~7 pellets exceeding ~200 mass
 const EJECT_MIN_CELL_MASS = 32;
@@ -122,8 +124,74 @@ const FOOD_COLORS = [
   '#EC4899', '#06B6D4', '#14B8A6', '#6366F1', '#F97316'
 ];
 
-const FOOD_GRID_CELL_SIZE = 800;
-const FOOD_GRID_COLS = 50; // 40000 / 800
+const FOOD_GRID_CELL_SIZE = 500;
+const FOOD_GRID_COLS = 20; // 10000 / 500
+
+function createFoodPellet(
+  id: number,
+  sectorCol?: number,
+  sectorRow?: number,
+  tier?: 'super' | 'medium' | 'standard'
+): FoodPellet {
+  let mass = FOOD_MASS;
+  let radius = 9.5;
+  let color = FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)];
+  let isSuper = false;
+  let isMedium = false;
+
+  let chosenTier = tier;
+  if (!chosenTier) {
+    const rand = Math.random();
+    if (rand < 0.10) {
+      chosenTier = 'super';
+    } else if (rand < 0.35) {
+      chosenTier = 'medium';
+    } else {
+      chosenTier = 'standard';
+    }
+  }
+
+  if (chosenTier === 'super') {
+    isSuper = true;
+    mass = SUPER_FOOD_MASS;
+    radius = 15;
+    color = '#F59E0B'; // Golden super pellet
+  } else if (chosenTier === 'medium') {
+    isMedium = true;
+    mass = MEDIUM_FOOD_MASS;
+    radius = 12;
+    color = FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)];
+  } else {
+    mass = FOOD_MASS;
+    radius = 9.5;
+    color = FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)];
+  }
+
+  let x: number;
+  let y: number;
+  if (sectorCol !== undefined && sectorRow !== undefined) {
+    const minX = sectorCol * FOOD_GRID_CELL_SIZE + 24;
+    const maxX = (sectorCol + 1) * FOOD_GRID_CELL_SIZE - 24;
+    const minY = sectorRow * FOOD_GRID_CELL_SIZE + 24;
+    const maxY = (sectorRow + 1) * FOOD_GRID_CELL_SIZE - 24;
+    x = Math.round(minX + Math.random() * (maxX - minX));
+    y = Math.round(minY + Math.random() * (maxY - minY));
+  } else {
+    x = Math.round(Math.random() * (MAP_SIZE - 200) + 100);
+    y = Math.round(Math.random() * (MAP_SIZE - 200) + 100);
+  }
+
+  return {
+    id,
+    x: Math.max(30, Math.min(MAP_SIZE - 30, x)),
+    y: Math.max(30, Math.min(MAP_SIZE - 30, y)),
+    color,
+    mass,
+    radius,
+    isSuper,
+    isMedium
+  };
+}
 
 export class GameRoom extends DurableObject {
   private players: Map<string, PlayerSession> = new Map();
@@ -170,21 +238,23 @@ export class GameRoom extends DurableObject {
   private initFoods(): void {
     this.foods.clear();
     this.foodGrid.clear();
-    for (let i = 1; i <= FOOD_COUNT; i++) {
-      const isSuper = Math.random() < 0.10;
-      const pellet: FoodPellet = {
-        id: i,
-        x: Math.round(Math.random() * (MAP_SIZE - 200) + 100),
-        y: Math.round(Math.random() * (MAP_SIZE - 200) + 100),
-        color: isSuper ? '#F59E0B' : FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)],
-        mass: isSuper ? SUPER_FOOD_MASS : FOOD_MASS,
-        radius: isSuper ? 14 : 9.5,
-        isSuper
-      };
-      this.foods.set(i, pellet);
-      this.addFoodToGrid(pellet);
+    let id = 1;
+    // Stratified spatial distribution: 400 sectors across 10,000x10,000 map.
+    // Exactly 12 food pellets per sector = 4,800 pellets perfectly even across entire arena.
+    const pelletsPerSector = Math.floor(FOOD_COUNT / (FOOD_GRID_COLS * FOOD_GRID_COLS)); // 12
+    for (let r = 0; r < FOOD_GRID_COLS; r++) {
+      for (let c = 0; c < FOOD_GRID_COLS; c++) {
+        for (let p = 0; p < pelletsPerSector; p++) {
+          // Perfectly balanced size tiers per sector:
+          // 1 Super Golden Orb (p === 0), 3 Medium Pellets (p 1-3), 8 Standard Pellets (p 4-11)
+          const tier: 'super' | 'medium' | 'standard' = p === 0 ? 'super' : (p <= 3 ? 'medium' : 'standard');
+          const pellet = createFoodPellet(id++, c, r, tier);
+          this.foods.set(pellet.id, pellet);
+          this.addFoodToGrid(pellet);
+        }
+      }
     }
-    this.nextFoodId = FOOD_COUNT + 1;
+    this.nextFoodId = id;
   }
 
   private initViruses(): void {
@@ -194,21 +264,21 @@ export class GameRoom extends DurableObject {
       const id = 'v_' + i;
       this.viruses.set(id, {
         id,
-        x: Math.round(Math.random() * (MAP_SIZE - 2400) + 1200),
-        y: Math.round(Math.random() * (MAP_SIZE - 2400) + 1200),
+        x: Math.round(Math.random() * (MAP_SIZE - 1600) + 800),
+        y: Math.round(Math.random() * (MAP_SIZE - 1600) + 800),
         mass: BASE_VIRUS_MASS
       });
     }
   }
 
   private spawnSafeVirus(id: string): void {
-    let bestX = Math.round(Math.random() * (MAP_SIZE - 2400) + 1200);
-    let bestY = Math.round(Math.random() * (MAP_SIZE - 2400) + 1200);
+    let bestX = Math.round(Math.random() * (MAP_SIZE - 1600) + 800);
+    let bestY = Math.round(Math.random() * (MAP_SIZE - 1600) + 800);
 
     // Pick location at least 450px away from any active player cell
     for (let attempt = 0; attempt < 35; attempt++) {
-      const testX = Math.round(Math.random() * (MAP_SIZE - 2400) + 1200);
-      const testY = Math.round(Math.random() * (MAP_SIZE - 2400) + 1200);
+      const testX = Math.round(Math.random() * (MAP_SIZE - 1600) + 800);
+      const testY = Math.round(Math.random() * (MAP_SIZE - 1600) + 800);
       let safe = true;
       for (const session of this.players.values()) {
         if (session.isDead) continue;
@@ -810,7 +880,7 @@ export class GameRoom extends DurableObject {
     } else if (parsed.type === 'eject') {
       this.handleEject(session);
     } else if (parsed.type === 'respawn') {
-      this.handleRespawn(session);
+      this.handleRespawn(session, parsed.name);
     } else if (parsed.type === 'ping') {
       try {
         session.ws.send(JSON.stringify({ type: 'pong', t: parsed.t }));
@@ -818,8 +888,12 @@ export class GameRoom extends DurableObject {
     }
   }
 
-  private handleRespawn(session: PlayerSession): void {
+  private handleRespawn(session: PlayerSession, name?: string): void {
     if (!session.isDead && session.cells.length > 0) return;
+
+    if (name && typeof name === 'string' && name.trim().length > 0) {
+      session.name = name.trim().substring(0, 16);
+    }
 
     const spawnX = Math.round(Math.random() * (MAP_SIZE - 400) + 200);
     const spawnY = Math.round(Math.random() * (MAP_SIZE - 400) + 200);
@@ -863,6 +937,7 @@ export class GameRoom extends DurableObject {
     for (let i = 0; i < initialLen; i++) {
       const cell = session.cells[i];
       if (cell.mass >= MIN_SPLIT_MASS && added < canAdd) {
+        const parentRadius = Math.sqrt(cell.mass * 100);
         const splitMass = Math.floor(cell.mass / 2);
         cell.mass = splitMass;
         const r = Math.sqrt(splitMass * 100);
@@ -879,13 +954,13 @@ export class GameRoom extends DurableObject {
         const childId = 'c_' + Math.random().toString(36).substring(2, 8);
         const child: ServerCell = {
           id: childId,
-          x: Math.max(r, Math.min(MAP_SIZE - r, cell.x + dirX * (r + 8))),
-          y: Math.max(r, Math.min(MAP_SIZE - r, cell.y + dirY * (r + 8))),
+          x: Math.max(r, Math.min(MAP_SIZE - r, cell.x + dirX * parentRadius)),
+          y: Math.max(r, Math.min(MAP_SIZE - r, cell.y + dirY * parentRadius)),
           mass: splitMass,
           vx: cell.vx,
           vy: cell.vy,
-          boostVx: dirX * SPLIT_IMPULSE,
-          boostVy: dirY * SPLIT_IMPULSE,
+          boostVx: dirX * 820,
+          boostVy: dirY * 820,
           recombineTimer: recombineTimer
         };
 
@@ -1039,16 +1114,15 @@ export class GameRoom extends DurableObject {
       if (session.isDead || session.cells.length === 0) continue;
 
       for (const cell of session.cells) {
-        // Boost velocity decay over ~0.5–1s (exponential friction)
-        if (Math.abs(cell.boostVx) > 2 || Math.abs(cell.boostVy) > 2) {
-          cell.x += cell.boostVx * dt;
-          cell.y += cell.boostVy * dt;
-          const decay = Math.exp(-3.5 * dt);
-          cell.boostVx *= decay;
-          cell.boostVy *= decay;
-        } else {
-          cell.boostVx = 0;
-          cell.boostVy = 0;
+        // In each 20 Hz tick, decay boost velocity: boostVx *= 0.90, boostVy *= 0.90
+        // When Math.hypot(boostVx, boostVy) < 20, reset boost to 0
+        if (cell.boostVx !== 0 || cell.boostVy !== 0) {
+          cell.boostVx *= 0.90;
+          cell.boostVy *= 0.90;
+          if (Math.hypot(cell.boostVx, cell.boostVy) < 20) {
+            cell.boostVx = 0;
+            cell.boostVy = 0;
+          }
         }
 
         // Recombine cooldown timer
@@ -1072,8 +1146,9 @@ export class GameRoom extends DurableObject {
           cell.vy *= Math.exp(-4 * dt);
         }
 
-        cell.x += cell.vx * dt;
-        cell.y += cell.vy * dt;
+        // Move child by its standard mouse velocity PLUS its remaining boostVx / boostVy
+        cell.x += (cell.vx + cell.boostVx) * dt;
+        cell.y += (cell.vy + cell.boostVy) * dt;
 
         // Map boundaries clamping
         const radius = Math.sqrt(cell.mass * 100);
@@ -1167,12 +1242,35 @@ export class GameRoom extends DurableObject {
       }
     }
 
-    // 5. Sibling cell interaction: Rigid Sibling Separation & Recombining
+    // 5. Sibling cell interaction: Rigid Separation & Gradual Recombination
     for (const session of allParticipants) {
       if (session.isDead || session.cells.length < 2) continue;
       const cells = session.cells;
 
-      // Multiple passes to resolve multi-cell clusters rigidly without collapsing
+      // 5A. Gradual Recombination Attraction:
+      // When sibling cells have recombineTimer <= 0, apply smooth inward gravitational attraction pulling eligible sibling cells toward their shared center of mass
+      let eligibleMass = 0;
+      let comX = 0;
+      let comY = 0;
+      for (const c of cells) {
+        if (c.recombineTimer <= 0) {
+          eligibleMass += c.mass;
+          comX += c.x * c.mass;
+          comY += c.y * c.mass;
+        }
+      }
+      if (eligibleMass > 0) {
+        comX /= eligibleMass;
+        comY /= eligibleMass;
+        for (const c of cells) {
+          if (c.recombineTimer <= 0) {
+            c.x += (comX - c.x) * 0.08;
+            c.y += (comY - c.y) * 0.08;
+          }
+        }
+      }
+
+      // 5B. Sibling Collision & Rigid Separation / Deep Merge Threshold
       for (let pass = 0; pass < 2; pass++) {
         for (let i = 0; i < cells.length; i++) {
           for (let j = i + 1; j < cells.length; j++) {
@@ -1186,9 +1284,12 @@ export class GameRoom extends DurableObject {
             const dist = Math.hypot(dx, dy) || 0.001;
             const minDist = r1 + r2;
 
-            // Recombination allowed only when both cooldown timers expired
+            // When BOTH sibling cells have recombineTimer <= 0:
+            // Completely disable rigid repulsive pushback between them.
+            // Merge Condition: Sibling cells must NOT merge on initial edge touch.
+            // Merge and sum masses ONLY when their centers deeply overlap: distance <= Math.max(r1, r2) * 0.50
             if (c1.recombineTimer <= 0 && c2.recombineTimer <= 0) {
-              if (dist < Math.max(r1, r2)) {
+              if (dist <= Math.max(r1, r2) * 0.50) {
                 if (c1.mass >= c2.mass) {
                   c1.mass += c2.mass;
                   cells.splice(j, 1);
@@ -1201,24 +1302,31 @@ export class GameRoom extends DurableObject {
                 }
               }
             } else if (dist < minDist) {
-              // Rigid Sibling Separation: push apart along collision normal so they only touch at edges
+              // When sibling cells have recombineTimer > 0 (either cell cannot yet recombine):
+              // Enforce rigid circle-circle pushback so they cannot overlap or collapse into one another.
+              // overlap = (r_1 + r_2) - d
+              // Weight displacement inversely by mass so larger sibling cells move less and smaller sibling cells slide outward
               const overlap = minDist - dist;
               const normalX = dx / dist;
               const normalY = dy / dist;
-              c1.x -= normalX * overlap * 0.5;
-              c1.y -= normalY * overlap * 0.5;
-              c2.x += normalX * overlap * 0.5;
-              c2.y += normalY * overlap * 0.5;
+              const totalMass = c1.mass + c2.mass;
+              const ratio1 = c2.mass / totalMass; // c1 displacement weighted inversely by its mass
+              const ratio2 = c1.mass / totalMass; // c2 displacement weighted inversely by its mass
+
+              c1.x -= normalX * overlap * ratio1;
+              c1.y -= normalY * overlap * ratio1;
+              c2.x += normalX * overlap * ratio2;
+              c2.y += normalY * overlap * ratio2;
 
               // Neutralize closing relative velocity along normal
               const relVx = c2.vx - c1.vx;
               const relVy = c2.vy - c1.vy;
               const normalVel = relVx * normalX + relVy * normalY;
               if (normalVel < 0) {
-                c1.vx += normalX * normalVel * 0.5;
-                c1.vy += normalY * normalVel * 0.5;
-                c2.vx += normalX * normalVel * 0.5;
-                c2.vy += normalY * normalVel * 0.5;
+                c1.vx += normalX * normalVel * ratio1;
+                c1.vy += normalY * normalVel * ratio1;
+                c2.vx -= normalX * normalVel * ratio2;
+                c2.vy -= normalY * normalVel * ratio2;
               }
 
               c1.x = Math.max(r1, Math.min(MAP_SIZE - r1, c1.x));
@@ -1264,19 +1372,11 @@ export class GameRoom extends DurableObject {
                 eatenFoodIds.push(foodId);
                 cell.mass += food.mass || FOOD_MASS;
 
-                // Respawn new food pellet at random position
+                // Respawn new food pellet maintaining perfectly balanced sector density and size tier
                 const newId = this.nextFoodId++;
                 if (this.nextFoodId > 1000000000) this.nextFoodId = 1;
-                const isSuper = Math.random() < 0.10;
-                const newFood: FoodPellet = {
-                  id: newId,
-                  x: Math.round(Math.random() * (MAP_SIZE - 120) + 60),
-                  y: Math.round(Math.random() * (MAP_SIZE - 120) + 60),
-                  color: isSuper ? '#F59E0B' : FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)],
-                  mass: isSuper ? SUPER_FOOD_MASS : FOOD_MASS,
-                  radius: isSuper ? 14 : 9.5,
-                  isSuper
-                };
+                const tier: 'super' | 'medium' | 'standard' = food.isSuper ? 'super' : (food.isMedium ? 'medium' : 'standard');
+                const newFood = createFoodPellet(newId, c, r, tier);
                 this.foods.set(newId, newFood);
                 this.addFoodToGrid(newFood);
                 newFoods.push(newFood);
@@ -1354,6 +1454,19 @@ export class GameRoom extends DurableObject {
                 c1.mass += c2.mass;
                 p2.cells.splice(cj, 1);
 
+                // Notify predator of cell consumed
+                if (p1.ws) {
+                  try {
+                    p1.ws.send(
+                      JSON.stringify({
+                        type: 'cellEaten',
+                        victimId: p2.id,
+                        victimName: p2.name || 'Player'
+                      })
+                    );
+                  } catch (_) {}
+                }
+
                 // If all cells for player/bot 2 are eaten
                 if (p2.cells.length === 0) {
                   p2.isDead = true;
@@ -1362,12 +1475,27 @@ export class GameRoom extends DurableObject {
                       p2.ws.send(
                         JSON.stringify({
                           type: 'gameOver',
-                          killerName: p1.name || 'Player'
+                          killerName: p1.name || 'Player',
+                          killerId: p1.id
                         })
                       );
                     } catch (_) {}
                   } else {
                     this.onBotDeath(p2.id);
+                  }
+
+                  // Broadcast kill notification packet to all active human players
+                  const killPacket = JSON.stringify({
+                    type: 'kill',
+                    killerName: p1.name || 'Player',
+                    killerId: p1.id,
+                    victimName: p2.name || 'Player',
+                    victimId: p2.id
+                  });
+                  for (const s of this.players.values()) {
+                    try {
+                      s.ws.send(killPacket);
+                    } catch (_) {}
                   }
                 }
                 break;

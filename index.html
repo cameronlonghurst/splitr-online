@@ -258,6 +258,14 @@
         animation: avatarPulse 3.4s ease-in-out infinite;
       }
 
+      @keyframes killFeedSlideIn {
+        0% { opacity: 0; transform: translateX(110%); }
+        100% { opacity: 1; transform: translateX(0); }
+      }
+      .animate-kill-slide {
+        animation: killFeedSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
       /* Hover micro-interactions */
       .btn-hover-lift {
         transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.18s cubic-bezier(0.16, 1, 0.3, 1);
@@ -341,25 +349,46 @@
       </button>
     </div>
 
-    <!-- Top Right Leaderboard HUD -->
-    <div id="leaderboardHud" class="absolute top-4 right-4 z-10 hidden pointer-events-none w-56 md:w-60">
-      <div class="editorial-hud p-3.5 shadow-md">
-        <div class="flex items-center justify-between pb-2 mb-2 border-b border-[#111111] dark:border-[#262626] text-[11px] font-bold tracking-wider uppercase">
-          <div class="flex items-center gap-1.5">
-            <span class="font-serif text-sm tracking-normal capitalize font-bold text-[#111111] dark:text-[#FFFFFF]">Leaderboard</span>
-            <span id="playerTotalCount" class="text-[10px] text-zinc-500 font-normal">(0)</span>
+    <!-- Top Right Column (Leaderboard HUD & Sleek Brain-Rot Kill Feed) -->
+    <div id="topRightHud" class="absolute top-4 right-4 z-10 pointer-events-none w-56 md:w-64 flex flex-col items-end gap-2">
+      <!-- Top Right Leaderboard HUD -->
+      <div id="leaderboardHud" class="w-full hidden pointer-events-none">
+        <div class="editorial-hud p-3.5 shadow-md">
+          <div class="flex items-center justify-between pb-2 mb-2 border-b border-[#111111] dark:border-[#262626] text-[11px] font-bold tracking-wider uppercase">
+            <div class="flex items-center gap-1.5">
+              <span class="font-serif text-sm tracking-normal capitalize font-bold text-[#111111] dark:text-[#FFFFFF]">Leaderboard</span>
+              <span id="playerTotalCount" class="text-[10px] text-zinc-500 font-normal">(0)</span>
+            </div>
+            <button
+              id="btnHideLeaderboard"
+              class="text-[10px] px-1.5 py-0.5 border border-zinc-300 dark:border-zinc-700 hover:border-[#111111] dark:hover:border-white hover:bg-[#111111] dark:hover:bg-white hover:text-white dark:hover:text-[#111111] rounded font-mono font-bold pointer-events-auto cursor-pointer transition-colors"
+              title="Hide Leaderboard (L)"
+            >
+              Hide (L)
+            </button>
           </div>
-          <button
-            id="btnHideLeaderboard"
-            class="text-[10px] px-1.5 py-0.5 border border-zinc-300 dark:border-zinc-700 hover:border-[#111111] dark:hover:border-white hover:bg-[#111111] dark:hover:bg-white hover:text-white dark:hover:text-[#111111] rounded font-mono font-bold pointer-events-auto cursor-pointer transition-colors"
-            title="Hide Leaderboard (L)"
-          >
-            Hide (L)
-          </button>
+          <div id="leaderboardList" class="flex flex-col gap-1.5 text-xs">
+            <!-- Dynamically populated with player names -->
+          </div>
         </div>
-        <div id="leaderboardList" class="flex flex-col gap-1.5 text-xs">
-          <!-- Dynamically populated with player names -->
-        </div>
+      </div>
+
+      <!-- Sleek Brain-Rot Kill Feed (Top-Right HUD underneath Leaderboard) -->
+      <div id="killFeedContainer" class="w-full flex flex-col items-end gap-1.5 pointer-events-none"></div>
+    </div>
+
+    <!-- Spectator Mode Top Pill -->
+    <div id="spectatorHud" class="hidden absolute top-4 left-1/2 -translate-x-1/2 z-20 pointer-events-auto">
+      <div class="px-4 py-2 bg-[#0A0A0A]/90 border border-[#262626] backdrop-blur-md rounded-full text-white text-xs font-mono shadow-xl flex items-center gap-3">
+        <span class="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse"></span>
+        <span class="font-bold tracking-wider uppercase text-zinc-300">Spectating Match</span>
+        <span class="text-zinc-600">|</span>
+        <button id="btnSpectatorRespawn" class="px-3 py-1 bg-emerald-400 hover:bg-emerald-300 active:scale-95 text-black font-bold rounded-full transition-all cursor-pointer text-xs">
+          Run It Back (Space)
+        </button>
+        <button id="btnSpectatorMenu" class="px-2 py-1 text-zinc-400 hover:text-white transition-colors cursor-pointer text-xs">
+          Menu
+        </button>
       </div>
     </div>
 
@@ -715,6 +744,72 @@
           <button id="btnFallbackPlayNormal" class="btn-editorial-secondary w-full py-2.5 rounded-lg text-xs font-bold cursor-pointer btn-hover-lift">
             Play Normal (Offline Bots)
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ======================================================== -->
+    <!-- HIGH-IMPACT SLEEK ELIMINATION SCREEN MODAL               -->
+    <!-- ======================================================== -->
+    <div
+      id="eliminationModal"
+      class="fixed inset-0 z-50 hidden flex items-center justify-center p-4"
+      style="background-color: rgba(10, 10, 10, 0.85); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);"
+    >
+      <div class="w-full max-w-[460px] bg-[#121212] border border-[#262626] rounded-2xl p-6 sm:p-7 shadow-2xl flex flex-col gap-5 text-white animate-menu-reveal relative">
+        <!-- Elimination Header -->
+        <div class="text-center flex flex-col items-center gap-1.5">
+          <span class="inline-block px-2.5 py-0.5 rounded text-[10px] font-mono font-bold tracking-widest uppercase bg-red-500/20 text-red-400 border border-red-500/30">
+            ELIMINATED
+          </span>
+          <h2 id="eliminationHeader" class="font-serif text-2xl sm:text-3xl font-black text-white tracking-tight leading-tight">
+            YOU GOT COOKED BY <span id="eliminationKillerName" class="text-red-500 drop-shadow-sm font-black">Unknown</span>
+          </h2>
+        </div>
+
+        <!-- Run Statistics Grid (2x2 Clean Badges) -->
+        <div class="grid grid-cols-2 gap-3 font-mono">
+          <div class="bg-[#181818] border border-[#262626] rounded-xl p-3 flex flex-col items-center justify-center text-center">
+            <span class="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-0.5">Peak Mass</span>
+            <span id="deathPeakMass" class="text-xl sm:text-2xl font-black text-white">0</span>
+          </div>
+          <div class="bg-[#181818] border border-[#262626] rounded-xl p-3 flex flex-col items-center justify-center text-center">
+            <span class="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-0.5">Time Survived</span>
+            <span id="deathTimeSurvived" class="text-xl sm:text-2xl font-black text-white">00:00</span>
+          </div>
+          <div class="bg-[#181818] border border-[#262626] rounded-xl p-3 flex flex-col items-center justify-center text-center">
+            <span class="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-0.5">Food Consumed</span>
+            <span id="deathFoodConsumed" class="text-xl sm:text-2xl font-black text-white">0</span>
+          </div>
+          <div class="bg-[#181818] border border-[#262626] rounded-xl p-3 flex flex-col items-center justify-center text-center">
+            <span class="text-[10px] uppercase font-bold text-zinc-400 tracking-wider mb-0.5">Players Defeated</span>
+            <span id="deathPlayersDefeated" class="text-xl sm:text-2xl font-black text-emerald-400">0</span>
+          </div>
+        </div>
+
+        <!-- Call to Action Buttons -->
+        <div class="flex flex-col gap-2.5 pt-1">
+          <button
+            id="btnRunItBack"
+            class="w-full py-3.5 px-4 rounded-xl font-mono font-bold text-sm bg-emerald-400 hover:bg-emerald-300 active:scale-[0.98] text-black transition-all shadow-lg flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <span>RUN IT BACK</span>
+            <span class="text-xs opacity-75 font-normal">(Space / Enter)</span>
+          </button>
+          <div class="flex items-center justify-between gap-2">
+            <button
+              id="btnSpectate"
+              class="flex-1 py-2 px-3 rounded-lg font-mono text-xs text-zinc-400 hover:text-white hover:bg-white/5 active:scale-[0.98] transition-all cursor-pointer text-center"
+            >
+              Spectate
+            </button>
+            <button
+              id="btnLeaveToLobby"
+              class="py-2 px-3 rounded-lg font-mono text-xs text-zinc-500 hover:text-zinc-300 hover:bg-white/5 active:scale-[0.98] transition-all cursor-pointer text-center"
+            >
+              Return to Lobby
+            </button>
+          </div>
         </div>
       </div>
     </div>

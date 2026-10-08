@@ -17,6 +17,9 @@ export class OnlineRoomClient {
     this.onConnectedCallback = null;
     this.onGameOverCallback = null;
     this.onRespawnedCallback = null;
+    this.onKillCallback = null;
+    this.onCellEatenCallback = null;
+    this.cellVisualRadii = new Map();
   }
 
   static getWebSocketUrl() {
@@ -35,7 +38,7 @@ export class OnlineRoomClient {
     return `${protocol}//${host}/api/room/public`;
   }
 
-  connect({ nickname, color, onConnected, onInit, onState, onError, onDisconnect, onGameOver, onRespawned }) {
+  connect({ nickname, color, onConnected, onInit, onState, onError, onDisconnect, onGameOver, onRespawned, onKill, onCellEaten }) {
     this.disconnect();
 
     this.onConnectedCallback = onConnected;
@@ -45,6 +48,8 @@ export class OnlineRoomClient {
     this.onDisconnectCallback = onDisconnect;
     this.onGameOverCallback = onGameOver;
     this.onRespawnedCallback = onRespawned;
+    this.onKillCallback = onKill;
+    this.onCellEatenCallback = onCellEaten;
 
     const url = OnlineRoomClient.getWebSocketUrl();
 
@@ -95,6 +100,25 @@ export class OnlineRoomClient {
         if (this.onConnectedCallback) this.onConnectedCallback(data);
       } else if (data.type === 'state') {
         this.serverPlayers = Array.isArray(data.players) ? data.players : [];
+        // Apply radius easing smoothly toward Math.sqrt(mass * 100) at 0.15 per frame/update
+        const activeIds = new Set();
+        for (const p of this.serverPlayers) {
+          if (Array.isArray(p.cells)) {
+            for (const c of p.cells) {
+              activeIds.add(c.id);
+              const targetR = Math.sqrt(c.mass * 100);
+              const prevR = this.cellVisualRadii.get(c.id) || targetR;
+              const easedR = prevR + (targetR - prevR) * 0.15;
+              this.cellVisualRadii.set(c.id, easedR);
+              c.visualRadius = easedR;
+            }
+          }
+        }
+        for (const id of this.cellVisualRadii.keys()) {
+          if (!activeIds.has(id)) {
+            this.cellVisualRadii.delete(id);
+          }
+        }
         if (this.onStateCallback) {
           this.onStateCallback(data, this.localPlayerId);
         }
@@ -105,6 +129,14 @@ export class OnlineRoomClient {
       } else if (data.type === 'respawned') {
         if (this.onRespawnedCallback) {
           this.onRespawnedCallback(data);
+        }
+      } else if (data.type === 'kill') {
+        if (this.onKillCallback) {
+          this.onKillCallback(data);
+        }
+      } else if (data.type === 'cellEaten') {
+        if (this.onCellEatenCallback) {
+          this.onCellEatenCallback(data);
         }
       }
     };
@@ -150,9 +182,9 @@ export class OnlineRoomClient {
     this.sendRaw({ type: 'eject' });
   }
 
-  sendRespawn() {
+  sendRespawn(name) {
     if (!this.isConnected || !this.ws || this.ws.readyState !== WebSocket.OPEN) return;
-    this.sendRaw({ type: 'respawn' });
+    this.sendRaw({ type: 'respawn', name: name || undefined });
   }
 
   sendRaw(obj) {
@@ -163,10 +195,17 @@ export class OnlineRoomClient {
     }
   }
 
+  easeRadius(currentRadius, targetMass, factor = 0.15) {
+    const targetRadius = Math.sqrt(targetMass * 100);
+    if (!currentRadius) return targetRadius;
+    return currentRadius + (targetRadius - currentRadius) * factor;
+  }
+
   disconnect() {
     this.isConnected = false;
     this.localPlayerId = null;
     this.serverPlayers = [];
+    this.cellVisualRadii.clear();
     if (this.ws) {
       try {
         this.ws.onopen = null;

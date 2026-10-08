@@ -38,6 +38,7 @@ export function getRandomPaletteColor() {
   const FOOD_COUNT = 4800;
   const VIRUS_COUNT = 38;
   const FOOD_MASS = 2;
+  const MEDIUM_FOOD_MASS = 5;
   const SUPER_FOOD_MASS = 10;
 
   // Mass pellets: 15 mass points for each ejected mass pellet
@@ -403,6 +404,34 @@ export function getRandomPaletteColor() {
       this.modalRecords = document.getElementById('modalRecords');
       this.modalControls = document.getElementById('modalControls');
 
+      // High-Impact Elimination Modal Elements
+      this.eliminationModal = document.getElementById('eliminationModal');
+      this.eliminationHeader = document.getElementById('eliminationHeader');
+      this.eliminationKillerName = document.getElementById('eliminationKillerName');
+      this.deathPeakMass = document.getElementById('deathPeakMass');
+      this.deathTimeSurvived = document.getElementById('deathTimeSurvived');
+      this.deathFoodConsumed = document.getElementById('deathFoodConsumed');
+      this.deathPlayersDefeated = document.getElementById('deathPlayersDefeated');
+      this.btnRunItBack = document.getElementById('btnRunItBack');
+      this.btnSpectate = document.getElementById('btnSpectate');
+      this.btnLeaveToLobby = document.getElementById('btnLeaveToLobby');
+
+      // Spectator Mode Top Pill Elements
+      this.spectatorHud = document.getElementById('spectatorHud');
+      this.btnSpectatorRespawn = document.getElementById('btnSpectatorRespawn');
+      this.btnSpectatorMenu = document.getElementById('btnSpectatorMenu');
+
+      // Sleek Brain-Rot Kill Feed
+      this.killFeedContainer = document.getElementById('killFeedContainer');
+
+      // Run Statistics & Spectator Camera State
+      this.playersDefeated = 0;
+      this.isEliminated = false;
+      this.eliminationTime = 0;
+      this.killerName = '';
+      this.killerId = null;
+      this.spectateTargetMode = 'killer'; // 'killer' for 3 seconds, then 'leader'
+
       // Lobby Preview Elements
       this.previewCellAvatar = document.getElementById('previewCellAvatar');
       this.previewCellName = document.getElementById('previewCellName');
@@ -466,7 +495,7 @@ export function getRandomPaletteColor() {
       // Online WebSocket Client & State
       this.onlineClient = new OnlineRoomClient();
       this.isOnlineMode = false;
-      this.onlineMapSize = 40000;
+      this.onlineMapSize = MAP_SIZE;
       this.onlineFoods = new Map();
       this.onlineViruses = new Map();
       this.onlineEjectedPellets = new Map();
@@ -642,6 +671,15 @@ export function getRandomPaletteColor() {
           return;
         }
 
+        // If eliminated or spectating: Space or Enter immediately triggers fast respawn (Run It Back)
+        if (this.isEliminated || (this.eliminationModal && !this.eliminationModal.classList.contains('hidden')) || this.isSpectating) {
+          if (e.code === 'Space' || e.key === ' ' || e.key === 'Enter') {
+            e.preventDefault();
+            this.runItBack();
+            return;
+          }
+        }
+
         // On lobby menu: pressing Enter joins standard online match
         if (e.key === 'Enter' && !this.isAlive && this.lobbyScreen && !this.lobbyScreen.classList.contains('hidden')) {
           e.preventDefault();
@@ -814,9 +852,24 @@ export function getRandomPaletteColor() {
       if (btnPlay) {
         btnPlay.addEventListener('click', () => this.startNormalGame());
       }
-      const btnSpectate = document.getElementById('btnSpectate');
-      if (btnSpectate) {
-        btnSpectate.addEventListener('click', () => this.startSpectate());
+
+      // Elimination Modal Action Buttons
+      if (this.btnRunItBack) {
+        this.btnRunItBack.addEventListener('click', () => this.runItBack());
+      }
+      if (this.btnSpectate) {
+        this.btnSpectate.addEventListener('click', () => this.startSpectating());
+      }
+      if (this.btnLeaveToLobby) {
+        this.btnLeaveToLobby.addEventListener('click', () => this.returnToLobby());
+      }
+
+      // Spectator Mode HUD Action Buttons
+      if (this.btnSpectatorRespawn) {
+        this.btnSpectatorRespawn.addEventListener('click', () => this.runItBack());
+      }
+      if (this.btnSpectatorMenu) {
+        this.btnSpectatorMenu.addEventListener('click', () => this.returnToLobby());
       }
 
       // Online Connection Error Modal Buttons
@@ -1366,18 +1419,40 @@ export function getRandomPaletteColor() {
             this.syncOnlinePlayers(stateData.players, this.localPlayerId);
           }
         },
-        onGameOver: () => {
+        onGameOver: (data) => {
           if (this.isAlive) {
-            this.onLocalPlayerDeath();
+            this.onLocalPlayerDeath(data && data.killerName, data && data.killerId);
           }
+        },
+        onKill: (data) => {
+          if (data && data.killerName && data.victimName) {
+            const isKillerLocal = data.killerId === this.localPlayerId;
+            const isVictimLocal = data.victimId === this.localPlayerId;
+            this.addKillFeedEntry(data.killerName, data.victimName, isKillerLocal, isVictimLocal);
+          }
+        },
+        onCellEaten: () => {
+          this.playersDefeated++;
         },
         onRespawned: (data) => {
           this.isAlive = true;
           this.isOnlineDead = false;
+          this.isEliminated = false;
+          this.isSpectating = false;
           this.startTime = Date.now();
+          this.peakMass = BASE_PLAYER_MASS;
+          this.foodEaten = 0;
+          this.playersDefeated = 0;
+          this.camZoom = 0.65;
           if (data && data.spawn) {
             this.camX = data.spawn.x;
             this.camY = data.spawn.y;
+          }
+          if (this.eliminationModal) {
+            this.eliminationModal.classList.add('hidden');
+          }
+          if (this.spectatorHud) {
+            this.spectatorHud.classList.add('hidden');
           }
         },
         onError: (err) => {
@@ -1592,6 +1667,7 @@ export function getRandomPaletteColor() {
       if (this.topStatsHud) this.topStatsHud.classList.remove('hidden');
       if (this.leaderboardHud && this.showLeaderboard) this.leaderboardHud.classList.remove('hidden');
       if (this.btnShowLeaderboard && !this.showLeaderboard) this.btnShowLeaderboard.classList.remove('hidden');
+      if (this.killFeedContainer) this.killFeedContainer.classList.remove('hidden');
       if (this.bottomLeftHud) this.bottomLeftHud.classList.remove('hidden');
       if (this.minimapHud) this.minimapHud.classList.remove('hidden');
       if (this.macroHud) this.macroHud.classList.remove('hidden');
@@ -1601,6 +1677,12 @@ export function getRandomPaletteColor() {
       if (this.topStatsHud) this.topStatsHud.classList.add('hidden');
       if (this.leaderboardHud) this.leaderboardHud.classList.add('hidden');
       if (this.btnShowLeaderboard) this.btnShowLeaderboard.classList.add('hidden');
+      if (this.killFeedContainer) {
+        this.killFeedContainer.classList.add('hidden');
+        this.killFeedContainer.innerHTML = '';
+      }
+      if (this.eliminationModal) this.eliminationModal.classList.add('hidden');
+      if (this.spectatorHud) this.spectatorHud.classList.add('hidden');
       if (this.bottomLeftHud) this.bottomLeftHud.classList.add('hidden');
       if (this.minimapHud) this.minimapHud.classList.add('hidden');
       if (this.macroHud) this.macroHud.classList.add('hidden');
@@ -1613,19 +1695,43 @@ export function getRandomPaletteColor() {
       this.ejectedMasses = [];
       this.foodGrid.clear();
 
-      for (let i = 0; i < FOOD_COUNT; i++) {
-        const isSuper = Math.random() < 0.10;
-        const food = {
-          id: i,
-          x: Math.random() * (MAP_SIZE - 200) + 100,
-          y: Math.random() * (MAP_SIZE - 200) + 100,
-          color: isSuper ? '#F59E0B' : FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)],
-          mass: isSuper ? SUPER_FOOD_MASS : FOOD_MASS,
-          radius: isSuper ? 14 : 9.5,
-          isSuper
-        };
-        this.foods.push(food);
-        this.foodGrid.insert(food);
+      // Stratified spatial distribution: 400 sectors across 10,000x10,000 map.
+      // Exactly 12 food pellets per sector = 4,800 pellets perfectly even across entire arena.
+      const sectorsCount = 20; // 10,000 / 500
+      const sectorSize = 500;
+      const pelletsPerSector = Math.floor(FOOD_COUNT / (sectorsCount * sectorsCount)); // 12
+      let id = 0;
+
+      for (let r = 0; r < sectorsCount; r++) {
+        for (let c = 0; c < sectorsCount; c++) {
+          for (let p = 0; p < pelletsPerSector; p++) {
+            // Perfectly balanced size tiers per sector:
+            // 1 Super Golden Orb (15px, mass 10), 3 Medium Pellets (12px, mass 5), 8 Standard Pellets (9.5px, mass 2)
+            const isSuper = p === 0;
+            const isMedium = p >= 1 && p <= 3;
+            const mass = isSuper ? SUPER_FOOD_MASS : (isMedium ? MEDIUM_FOOD_MASS : FOOD_MASS);
+            const radius = isSuper ? 15 : (isMedium ? 12 : 9.5);
+            const color = isSuper ? '#F59E0B' : FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)];
+
+            const minX = c * sectorSize + 24;
+            const maxX = (c + 1) * sectorSize - 24;
+            const minY = r * sectorSize + 24;
+            const maxY = (r + 1) * sectorSize - 24;
+
+            const food = {
+              id: id++,
+              x: Math.round(minX + Math.random() * (maxX - minX)),
+              y: Math.round(minY + Math.random() * (maxY - minY)),
+              color,
+              mass,
+              radius,
+              isSuper,
+              isMedium
+            };
+            this.foods.push(food);
+            this.foodGrid.insert(food);
+          }
+        }
       }
 
       for (let i = 0; i < VIRUS_COUNT; i++) {
@@ -1791,7 +1897,15 @@ export function getRandomPaletteColor() {
         conn.send({
           type: 'init',
           playerId: peerId,
-          foods: this.foods.map(f => ({ id: f.id, x: Math.round(f.x), y: Math.round(f.y), c: f.color, s: f.isSuper })),
+          foods: this.foods.map(f => ({
+            id: f.id,
+            x: Math.round(f.x),
+            y: Math.round(f.y),
+            c: f.color,
+            s: !!f.isSuper,
+            m: !!f.isMedium,
+            r: f.radius
+          })),
           viruses: this.viruses.map(v => ({ id: v.id, x: Math.round(v.x), y: Math.round(v.y), m: v.mass }))
         });
       });
@@ -2021,9 +2135,10 @@ export function getRandomPaletteColor() {
           x: f.x,
           y: f.y,
           color: f.c,
-          radius: f.s ? 14 : 9.5,
-          mass: f.s ? SUPER_FOOD_MASS : FOOD_MASS,
-          isSuper: f.s
+          radius: f.r || (f.s ? 15 : (f.m ? 12 : 9.5)),
+          mass: f.s ? SUPER_FOOD_MASS : (f.m ? MEDIUM_FOOD_MASS : FOOD_MASS),
+          isSuper: !!f.s,
+          isMedium: !!f.m
         }));
         this.viruses = data.viruses.map(v => new Virus(v.id, v.x, v.y));
       } else if (data.type === 'state') {
@@ -2546,10 +2661,17 @@ export function getRandomPaletteColor() {
                 this.playEatSound(food.isSuper);
               }
 
-              // Respawn food in arena
-              food.x = Math.random() * (MAP_SIZE - 200) + 100;
-              food.y = Math.random() * (MAP_SIZE - 200) + 100;
+              // Respawn food in arena keeping balanced sector density and size tier
+              const col = Math.min(19, Math.max(0, Math.floor(food.x / 500)));
+              const row = Math.min(19, Math.max(0, Math.floor(food.y / 500)));
+              const minX = col * 500 + 24;
+              const maxX = (col + 1) * 500 - 24;
+              const minY = row * 500 + 24;
+              const maxY = (row + 1) * 500 - 24;
+              food.x = Math.round(minX + Math.random() * (maxX - minX));
+              food.y = Math.round(minY + Math.random() * (maxY - minY));
               food.color = food.isSuper ? '#F59E0B' : FOOD_COLORS[Math.floor(Math.random() * FOOD_COLORS.length)];
+              this.foodGrid.insert(food);
             }
           }
         }
@@ -2592,9 +2714,20 @@ export function getRandomPaletteColor() {
 
                 p2.cells.splice(cj, 1);
 
+                if (p1.id === this.localPlayerId && p2.id !== this.localPlayerId) {
+                  this.playersDefeated++;
+                }
+
                 if (p2.cells.length === 0) {
+                  this.addKillFeedEntry(
+                    p1.name || 'Player',
+                    p2.name || 'Player',
+                    p1.id === this.localPlayerId,
+                    p2.id === this.localPlayerId
+                  );
+
                   if (p2.id === this.localPlayerId) {
-                    this.onLocalPlayerDeath();
+                    this.onLocalPlayerDeath(p1.name, p1.id);
                   } else if (p2.isBot) {
                     setTimeout(() => {
                       if (this.players.has(p2.id)) {
@@ -2696,13 +2829,20 @@ export function getRandomPaletteColor() {
       }
     }
 
-    // --- DEATH TRANSITION TO MENU WITH COMPLETE STAT BREAKDOWN ---
-    onLocalPlayerDeath() {
+    // --- HIGH-IMPACT ELIMINATION SCREEN & RUN STATISTICS ---
+    onLocalPlayerDeath(killerName = '', killerId = null) {
+      if (this.isEliminated && !this.isAlive) return;
       this.isAlive = false;
+      this.isEliminated = true;
+      this.eliminationTime = performance.now();
+      this.killerName = killerName || this.killerName || 'Player';
+      this.killerId = killerId || this.killerId || null;
+      this.spectateTargetMode = 'killer';
+
       const durationSec = Math.max(1, Math.round((Date.now() - this.startTime) / 1000));
-      const formattedTime = durationSec >= 60
-        ? `${Math.floor(durationSec / 60)}m ${durationSec % 60}s`
-        : `${durationSec}s`;
+      const mins = String(Math.floor(durationSec / 60)).padStart(2, '0');
+      const secs = String(durationSec % 60).padStart(2, '0');
+      const formattedTime = `${mins}:${secs}`;
 
       const finalPeakMass = Math.round(this.peakMass);
       const finalScore = Math.round(finalPeakMass * 1.5 + this.foodEaten * 10 + this.virusesHit * 50);
@@ -2725,7 +2865,29 @@ export function getRandomPaletteColor() {
         localStorage.setItem('splitr_total_time', String(prevTime + durationSec));
       } catch (_) {}
 
-      // Update Round Recap Banner
+      // Populate High-Impact Elimination Modal Badges
+      if (this.eliminationKillerName) {
+        this.eliminationKillerName.textContent = this.killerName;
+      }
+      if (this.deathPeakMass) {
+        this.deathPeakMass.textContent = finalPeakMass.toLocaleString();
+      }
+      if (this.deathTimeSurvived) {
+        this.deathTimeSurvived.textContent = formattedTime;
+      }
+      if (this.deathFoodConsumed) {
+        this.deathFoodConsumed.textContent = this.foodEaten.toLocaleString();
+      }
+      if (this.deathPlayersDefeated) {
+        this.deathPlayersDefeated.textContent = this.playersDefeated.toLocaleString();
+      }
+
+      // Show sleek elimination modal overlay (live canvas remains running smoothly behind backdrop blur)
+      if (this.eliminationModal) {
+        this.eliminationModal.classList.remove('hidden');
+      }
+
+      // Update Round Recap Banner for when player eventually returns to menu
       const elPeak = document.getElementById('summaryPeakMass');
       const elScore = document.getElementById('summaryScore');
       const elFood = document.getElementById('summaryFoodEaten');
@@ -2745,26 +2907,113 @@ export function getRandomPaletteColor() {
         }
       }
 
-      if (this.lobbyRoundSummary) {
-        this.lobbyRoundSummary.classList.remove('hidden');
-        this.lobbyRoundSummary.classList.remove('animate-recap-pop');
-        void this.lobbyRoundSummary.offsetWidth; // Force reflow to replay entrance animation
-        this.lobbyRoundSummary.classList.add('animate-recap-pop');
-      }
-
       this.initCareerStats();
-      this.hideInGameHUD();
       this.updatePingBadge();
+    }
 
+    // --- ZERO-RELOAD FAST RESPAWN (RUN IT BACK) ---
+    runItBack() {
+      if (this.eliminationModal) {
+        this.eliminationModal.classList.add('hidden');
+      }
+      if (this.spectatorHud) {
+        this.spectatorHud.classList.add('hidden');
+      }
+      this.isEliminated = false;
+      this.isSpectating = false;
+
+      if (this.isOnlineMode) {
+        if (this.onlineClient && this.onlineClient.isConnected) {
+          this.onlineClient.sendRespawn(this.localNickname);
+        } else {
+          this.startOnlineGame();
+        }
+      } else {
+        this.spawnLocalPlayer();
+      }
+    }
+
+    // --- SPECTATOR CAMERA TRANSITION ---
+    startSpectating() {
+      if (this.eliminationModal) {
+        this.eliminationModal.classList.add('hidden');
+      }
+      if (this.spectatorHud) {
+        this.spectatorHud.classList.remove('hidden');
+      }
+      this.isSpectating = true;
+      this.spectateTargetMode = 'leader';
+    }
+
+    // --- RETURN TO LOBBY ---
+    returnToLobby() {
+      if (this.eliminationModal) {
+        this.eliminationModal.classList.add('hidden');
+      }
+      if (this.spectatorHud) {
+        this.spectatorHud.classList.add('hidden');
+      }
+      this.isAlive = false;
+      this.isEliminated = false;
+      this.isSpectating = false;
+      if (this.isOnlineMode && this.onlineClient) {
+        this.onlineClient.disconnect();
+      }
+      this.hideInGameHUD();
       if (this.lobbyScreen) {
         this.lobbyScreen.classList.remove('hidden');
-        const mainCard = this.lobbyScreen.querySelector('.editorial-card');
-        if (mainCard) {
-          mainCard.classList.remove('animate-menu-reveal');
-          void mainCard.offsetWidth;
-          mainCard.classList.add('animate-menu-reveal');
+        if (this.lobbyRoundSummary) {
+          this.lobbyRoundSummary.classList.remove('hidden');
         }
       }
+    }
+
+    // --- SLEEK BRAIN-ROT KILL FEED (TOP-RIGHT HUD) ---
+    addKillFeedEntry(killerName, victimName, isKillerLocal = false, isVictimLocal = false) {
+      if (!this.killFeedContainer) {
+        this.killFeedContainer = document.getElementById('killFeedContainer');
+      }
+      if (!this.killFeedContainer) return;
+
+      // Cap feed at 4 active entries (remove oldest from top)
+      while (this.killFeedContainer.children.length >= 4) {
+        this.killFeedContainer.removeChild(this.killFeedContainer.firstElementChild);
+      }
+
+      const item = document.createElement('div');
+      item.className = 'flex items-center gap-1.5 px-2.5 py-1 rounded bg-[#0A0A0A]/90 border border-[#262626] text-xs font-mono font-bold shadow-md pointer-events-none transition-all animate-kill-slide';
+
+      const killerSpan = document.createElement('span');
+      killerSpan.className = isKillerLocal ? 'text-amber-400 font-extrabold' : 'text-white dark:text-zinc-200';
+      killerSpan.textContent = killerName || 'Player';
+
+      const arrowSpan = document.createElement('span');
+      arrowSpan.className = 'text-red-500 font-extrabold text-[11px] px-0.5';
+      arrowSpan.textContent = '➔';
+
+      const victimSpan = document.createElement('span');
+      victimSpan.className = isVictimLocal ? 'text-amber-400 font-extrabold' : 'text-zinc-400 dark:text-zinc-400';
+      victimSpan.textContent = victimName || 'Player';
+
+      item.appendChild(killerSpan);
+      item.appendChild(arrowSpan);
+      item.appendChild(victimSpan);
+
+      this.killFeedContainer.appendChild(item);
+
+      // Cleanly fade out and slide away over 4 seconds
+      setTimeout(() => {
+        if (item.parentNode) {
+          item.style.transition = 'opacity 0.6s ease-out, transform 0.6s ease-out';
+          item.style.opacity = '0';
+          item.style.transform = 'translateX(24px)';
+          setTimeout(() => {
+            if (item.parentNode) {
+              item.parentNode.removeChild(item);
+            }
+          }, 600);
+        }
+      }, 3400);
     }
 
     // --- MAIN GAME LOOP ---
@@ -2799,7 +3048,8 @@ export function getRandomPaletteColor() {
           lc.x += (lc.targetX - lc.x) * 0.25;
           lc.y += (lc.targetY - lc.y) * 0.25;
           const targetR = lc.targetRadius || Math.sqrt(lc.mass * 100);
-          lc.radius = (lc.radius || targetR) + (targetR - (lc.radius || targetR)) * Math.min(1, dt * 5.0);
+          // Easing: Lerp the visual radius smoothly toward Math.sqrt(mass * 100) at a factor of 0.15 per frame
+          lc.radius = (lc.radius || targetR) + (targetR - (lc.radius || targetR)) * 0.15;
         }
 
         // Rigid Sibling Separation for predicted local cells (No overlapping/collapsing)
@@ -2836,7 +3086,7 @@ export function getRandomPaletteColor() {
             rc.x += (rc.targetX - rc.x) * 0.25;
             rc.y += (rc.targetY - rc.y) * 0.25;
             const targetR = rc.targetRadius || Math.sqrt(rc.mass * 100);
-            rc.radius = (rc.radius || targetR) + (targetR - (rc.radius || targetR)) * Math.min(1, dt * 5.0);
+            rc.radius = (rc.radius || targetR) + (targetR - (rc.radius || targetR)) * 0.15;
           }
         }
 
@@ -2888,7 +3138,7 @@ export function getRandomPaletteColor() {
 
       if (this.isOnlineMode) {
         const localCells = Array.from(this.onlineLocalCells.values());
-        if (localCells.length > 0) {
+        if (localCells.length > 0 && this.isAlive) {
           let totalX = 0, totalY = 0, totalMass = 0;
           let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
 
@@ -2929,10 +3179,77 @@ export function getRandomPaletteColor() {
           if (this.hudCells) {
             this.hudCells.innerHTML = `${localCells.length}<span class="text-zinc-500 text-xs">/16</span>`;
           }
+        } else {
+          // ELIMINATED / SPECTATING CAMERA LOGIC (ONLINE)
+          // 1. Lock smoothly onto killer for 3 seconds so player sees who ate them
+          // 2. Transition camera to slowly drift toward leaderboard #1 leader
+          const timeSinceDeath = performance.now() - (this.eliminationTime || 0);
+          let targetX = null;
+          let targetY = null;
+          let targetMass = 200;
+
+          if (timeSinceDeath < 3000 && this.spectateTargetMode === 'killer' && this.killerId) {
+            const killer = this.onlineRemotePlayers.get(this.killerId);
+            if (killer && killer.cells.size > 0) {
+              let largestM = 0;
+              for (const c of killer.cells.values()) {
+                if (c.mass > largestM) {
+                  largestM = c.mass;
+                  targetX = c.x;
+                  targetY = c.y;
+                  targetMass = c.mass;
+                }
+              }
+            }
+          }
+
+          // If no killer target found, or 3s elapsed, or in leader spectate mode
+          if (targetX === null || targetY === null) {
+            let leader = null;
+            let topMass = -1;
+            for (const rp of this.onlineRemotePlayers.values()) {
+              if (rp.totalMass > topMass && rp.cells.size > 0) {
+                topMass = rp.totalMass;
+                leader = rp;
+              }
+            }
+
+            if (leader && leader.cells.size > 0) {
+              let largestM = 0;
+              for (const c of leader.cells.values()) {
+                if (c.mass > largestM) {
+                  largestM = c.mass;
+                  targetX = c.x;
+                  targetY = c.y;
+                  targetMass = c.mass;
+                }
+              }
+            }
+          }
+
+          if (targetX !== null && targetY !== null) {
+            currX = targetX;
+            currY = targetY;
+            // Smoothly track / drift towards target without ever snapping to (0,0)
+            const trackSpeed = (timeSinceDeath < 3000 && this.spectateTargetMode === 'killer') ? 4.5 : 2.0;
+            this.camX += (targetX - this.camX) * Math.min(1, dt * trackSpeed);
+            this.camY += (targetY - this.camY) * Math.min(1, dt * trackSpeed);
+
+            const targetZoom = Math.max(0.24, Math.min(0.8, 1 / Math.pow(Math.max(10, targetMass), 0.35) * 3.3));
+            this.camZoom += (targetZoom - this.camZoom) * Math.min(1, dt * 2.0);
+          } else {
+            // Ambient drift near center of arena
+            this.ambientAngle = (this.ambientAngle || 0) + dt * 0.15;
+            currX = (this.onlineMapSize / 2) + Math.cos(this.ambientAngle) * 600;
+            currY = (this.onlineMapSize / 2) + Math.sin(this.ambientAngle) * 600;
+            this.camX += (currX - this.camX) * Math.min(1, dt * 2.0);
+            this.camY += (currY - this.camY) * Math.min(1, dt * 2.0);
+            this.camZoom += (0.55 - this.camZoom) * Math.min(1, dt * 1.5);
+          }
         }
       } else {
         const localPlayer = this.players.get(this.localPlayerId);
-        if (localPlayer && localPlayer.cells.length > 0) {
+        if (localPlayer && localPlayer.cells.length > 0 && this.isAlive) {
           let totalX = 0, totalY = 0, totalMass = 0;
           for (const c of localPlayer.cells) {
             totalX += c.x * c.mass;
@@ -2953,26 +3270,71 @@ export function getRandomPaletteColor() {
           if (totalMass > this.peakMass) this.peakMass = totalMass;
           if (this.hudMass) this.hudMass.textContent = Math.round(totalMass);
           if (this.hudCells) this.hudCells.innerHTML = `${localPlayer.cells.length}<span class="text-zinc-500 text-xs">/16</span>`;
-        } else if (!this.isAlive || this.isSpectating) {
-        // Ambient Roam
-        const allCells = [];
-        for (const p of this.players.values()) {
-          for (const c of p.cells) allCells.push(c);
-        }
-        allCells.sort((a, b) => b.mass - a.mass);
-        if (allCells.length > 0) {
-          currX = allCells[0].x;
-          currY = allCells[0].y;
-          this.camX += (allCells[0].x - this.camX) * Math.min(1, dt * 3);
-          this.camY += (allCells[0].y - this.camY) * Math.min(1, dt * 3);
         } else {
-          this.ambientAngle = (this.ambientAngle || 0) + dt * 0.15;
-          currX = 5000 + Math.cos(this.ambientAngle) * 800;
-          currY = 5000 + Math.sin(this.ambientAngle) * 800;
-          this.camX = currX;
-          this.camY = currY;
-        }
-        this.camZoom += (0.6 - this.camZoom) * Math.min(1, dt * 2.5);
+          // ELIMINATED / SPECTATING CAMERA LOGIC (OFFLINE)
+          const timeSinceDeath = performance.now() - (this.eliminationTime || 0);
+          let targetX = null;
+          let targetY = null;
+          let targetMass = 200;
+
+          if (timeSinceDeath < 3000 && this.spectateTargetMode === 'killer' && this.killerId) {
+            const killer = this.players.get(this.killerId);
+            if (killer && killer.cells.length > 0) {
+              let largestM = 0;
+              for (const c of killer.cells) {
+                if (c.mass > largestM) {
+                  largestM = c.mass;
+                  targetX = c.x;
+                  targetY = c.y;
+                  targetMass = c.mass;
+                }
+              }
+            }
+          }
+
+          if (targetX === null || targetY === null) {
+            let leader = null;
+            let topMass = -1;
+            for (const p of this.players.values()) {
+              if (p.id !== this.localPlayerId && p.cells.length > 0) {
+                const tm = p.cells.reduce((sum, c) => sum + c.mass, 0);
+                if (tm > topMass) {
+                  topMass = tm;
+                  leader = p;
+                }
+              }
+            }
+
+            if (leader && leader.cells.length > 0) {
+              let largestM = 0;
+              for (const c of leader.cells) {
+                if (c.mass > largestM) {
+                  largestM = c.mass;
+                  targetX = c.x;
+                  targetY = c.y;
+                  targetMass = c.mass;
+                }
+              }
+            }
+          }
+
+          if (targetX !== null && targetY !== null) {
+            currX = targetX;
+            currY = targetY;
+            const trackSpeed = (timeSinceDeath < 3000 && this.spectateTargetMode === 'killer') ? 4.5 : 2.0;
+            this.camX += (targetX - this.camX) * Math.min(1, dt * trackSpeed);
+            this.camY += (targetY - this.camY) * Math.min(1, dt * trackSpeed);
+
+            const targetZoom = Math.max(0.24, Math.min(0.8, 1 / Math.pow(Math.max(10, targetMass), 0.35) * 3.3));
+            this.camZoom += (targetZoom - this.camZoom) * Math.min(1, dt * 2.0);
+          } else {
+            this.ambientAngle = (this.ambientAngle || 0) + dt * 0.15;
+            currX = 5000 + Math.cos(this.ambientAngle) * 800;
+            currY = 5000 + Math.sin(this.ambientAngle) * 800;
+            this.camX += (currX - this.camX) * Math.min(1, dt * 2.0);
+            this.camY += (currY - this.camY) * Math.min(1, dt * 2.0);
+            this.camZoom += (0.6 - this.camZoom) * Math.min(1, dt * 2.0);
+          }
         }
       }
 
@@ -3051,13 +3413,14 @@ export function getRandomPaletteColor() {
           continue;
         }
 
+        const r = food.radius || (food.isSuper ? 15 : (food.isMedium ? 12 : 9.5));
         ctx.beginPath();
-        ctx.arc(food.x, food.y, food.radius || 9.5, 0, Math.PI * 2);
+        ctx.arc(food.x, food.y, r, 0, Math.PI * 2);
         ctx.fillStyle = food.color;
         ctx.fill();
 
         ctx.strokeStyle = this.isDarkMode ? 'rgba(255, 255, 255, 0.85)' : '#111111';
-        ctx.lineWidth = food.isSuper ? 2 : 1;
+        ctx.lineWidth = food.isSuper ? 2 : (food.isMedium ? 1.5 : 1);
         ctx.stroke();
       }
     }
@@ -3272,7 +3635,7 @@ export function getRandomPaletteColor() {
           }
 
           if (fontSize >= 8) {
-            ctx.lineWidth = Math.max(2, fontSize * 0.16);
+            ctx.lineWidth = Math.max(3, fontSize * 0.22);
             ctx.strokeStyle = '#000000';
             ctx.fillStyle = '#FFFFFF';
 
@@ -3304,7 +3667,7 @@ export function getRandomPaletteColor() {
     }
 
     drawGrid(ctx) {
-      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 40000) : MAP_SIZE;
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || MAP_SIZE) : MAP_SIZE;
       const halfW = (this.canvas.width / 2) / this.camZoom;
       const halfH = (this.canvas.height / 2) / this.camZoom;
 
@@ -3333,7 +3696,7 @@ export function getRandomPaletteColor() {
     }
 
     drawBoundaries(ctx) {
-      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 40000) : MAP_SIZE;
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || MAP_SIZE) : MAP_SIZE;
       ctx.strokeStyle = this.isDarkMode ? '#FFFFFF' : '#111111';
       ctx.lineWidth = 8;
       ctx.strokeRect(0, 0, currentMapSize, currentMapSize);
@@ -3353,13 +3716,14 @@ export function getRandomPaletteColor() {
           continue;
         }
 
+        const r = food.radius || (food.isSuper ? 15 : (food.isMedium ? 12 : 9.5));
         ctx.beginPath();
-        ctx.arc(food.x, food.y, food.radius, 0, Math.PI * 2);
+        ctx.arc(food.x, food.y, r, 0, Math.PI * 2);
         ctx.fillStyle = food.color;
         ctx.fill();
 
         ctx.strokeStyle = this.isDarkMode ? 'rgba(255, 255, 255, 0.85)' : '#111111';
-        ctx.lineWidth = food.isSuper ? 2 : 1;
+        ctx.lineWidth = food.isSuper ? 2 : (food.isMedium ? 1.5 : 1);
         ctx.stroke();
       }
     }
@@ -3511,9 +3875,9 @@ export function getRandomPaletteColor() {
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
 
-          const isDarkCell = (c.color !== '#F7F7F5' && c.color !== '#ffffff');
-          const textColor = isDarkCell ? '#FFFFFF' : '#111111';
-          const strokeColor = isDarkCell ? 'rgba(0, 0, 0, 0.85)' : 'rgba(255, 255, 255, 0.85)';
+          // Crisp black stroke outline around white text for maximum readability
+          const textColor = '#FFFFFF';
+          const strokeColor = '#000000';
 
           ctx.font = `700 ${fontSize}px ${fontFam}`;
           const maxTextW = c.radius * 1.68;
@@ -3522,7 +3886,7 @@ export function getRandomPaletteColor() {
             fontSize = Math.max(8, Math.floor(fontSize * (maxTextW / textW)));
             ctx.font = `700 ${fontSize}px ${fontFam}`;
           }
-          ctx.lineWidth = Math.max(2.5, fontSize * 0.18);
+          ctx.lineWidth = Math.max(3, fontSize * 0.22);
           ctx.strokeStyle = strokeColor;
           ctx.fillStyle = textColor;
 
@@ -3622,7 +3986,7 @@ export function getRandomPaletteColor() {
       const h = this.minimapCanvas.height;
 
       mCtx.clearRect(0, 0, w, h);
-      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || 40000) : MAP_SIZE;
+      const currentMapSize = this.isOnlineMode ? (this.onlineMapSize || MAP_SIZE) : MAP_SIZE;
       const scale = w / currentMapSize;
 
       mCtx.fillStyle = this.isDarkMode ? '#121212' : '#FFFFFF';
